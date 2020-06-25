@@ -1,43 +1,6 @@
-#include <iostream>
-#include <bits/stdc++.h>
-using namespace std;
-class Node{
-	int d;
-	int maxCap;
-	bool leaf;
-	int id;
-	int *mbr;
-	int parent;
-	int *children;
-	int **childrenmbr;
-	int nchildren;
-public:
-	Node(int _d, int _maxCap, bool _leaf);
-//	Node *search(int k);
-friend class Rtree;
-}
+#include "rtree.hpp"
 
-class RTree{
-	Node *root;
-	int d;
-	int maxCap;
-public:
-	RTree(int _d, int _maxCap){
-		root = NULL; d=_d; maxCap=_maxCap;
-	}
-	Node Insert(int P[d], int n){
-//		get the root node from the page
-		Node RN;
-		Node Leaf = ChooseLeaf(RN, P);
-		if(maxCap>Leaf.nchildren){
-			for(int i=0; i<d; i++){
-				Leaf.children[nchildren][i+d] = P[i];
-			}
-			return RN;
-		}
-//      Code from step 10
-	}
-	Node ChooseLeaf(Node N, int[d] P){
+Rtree::Node ChooseLeaf(Node N, int[d] P){
 		for(int i=0; i<d; i++){
 			N.mbr[i] = min(N.mbr[i],N.mbr[i+d],P[i]);
 			N.mbr[i+d] = max(N.mbr[i],N.mbr[i+d],P[i]);
@@ -88,27 +51,5 @@ public:
 		// Get the node corresponding to mindiff from page
 		N;
 		ChooseLeaf(N, P)
-	}
-}
-
-Node::Node(int _d, int _maxCap, bool _leaf){
-	d = _d;
-	maxCap = _maxCap;
-	leaf = _leaf;
-	mbr = new int[2*d];
-	children = new int[maxCap];
-	childrenmbr = new int[maxCap][2*d];
-	for(int i = 0; i<maxCap; i++){
-		children[i]=INT_MIN;
-	}
-	if(leaf){
-		for (int i = 0; i < maxCap; i++){
-			for(int j = 0; j<d; i++){
-				childrenmbr[i][j]=INT_MIN;
-			}
-		}
-		for(int i = 0; i<maxCap; i++){
-			children[i]=-1;
-		}
 	}
 }

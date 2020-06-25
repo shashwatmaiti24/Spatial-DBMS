@@ -40,7 +40,7 @@ int BulkLoad(int d,int maxCap,int N,const char* filename,const char* rtreefilena
                 memcpy(&v[j],&data[4*i*d+4*j],sizeof(int));
             }
 
-            if ((PAGE_SIZE-offset)<=nodeSize){
+            if ((PAGE_SIZE-offset)<nodeSize){
                 if (offset<9000){
                     fh.MarkDirty(rph.GetPageNum());
                     fh.UnpinPage(rph.GetPageNum());
@@ -91,7 +91,7 @@ int BulkLoad(int d,int maxCap,int N,const char* filename,const char* rtreefilena
         ph=fh1.NextPage(ph.GetPageNum());
         p0=ph.GetPageNum();
     }
-    
+    assignParent(0,nodeIDCtr,maxCap,nodeIDCtr,nodeSize,d,fh);
     fm.CloseFile(fh);
     fm1.CloseFile(fh1);
     
@@ -128,8 +128,14 @@ void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize
             P.mbr[i]=INT32_MAX;
             P.mbr[i+d]=INT32_MIN;
         }
-        P.childId.resize(maxCap);
+        P.childId.resize(maxCap,INT32_MIN);
         P.childMbr.resize(maxCap);
+        for(int i=0;i<maxCap;i++){
+            for(int j=0;j<d;j++){
+                P.childMbr[i][j]=INT32_MAX;
+                P.childMbr[i][j+d]=INT32_MIN;
+            }
+        }
         for(int j=0;j<maxCap;j++){
             int childPnum=startIdx/nodePerPage;
             P.childId[j]=startIdx;
@@ -197,8 +203,14 @@ void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize
             P.mbr[i]=INT32_MAX;
             P.mbr[i+d]=INT32_MIN;
         }
-        P.childId.resize(maxCap);
+        P.childId.resize(maxCap,INT32_MIN);
         P.childMbr.resize(maxCap);
+        for(int i=0;i<maxCap;i++){
+            for(int j=0;j<d;j++){
+                P.childMbr[i][j]=INT32_MAX;
+                P.childMbr[i][j+d]=INT32_MIN;
+            }
+        }
         for(int j=0;j<numNode%maxCap;j++){
             int childPnum=startIdx/nodePerPage;
             P.childId[j]=startIdx;
@@ -210,6 +222,7 @@ void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize
             memcpy(&childData[offset+4],&P.id,sizeof(int));
             vector<int> childmbr(2*d);
             P.childMbr[j].resize(2*d);
+            
             for (int i=0;i<2*d;i++){
                 int mbrCordinate=-1;
                 memcpy(&mbrCordinate,&childData[offset+8+4*i],sizeof(int));
@@ -251,12 +264,84 @@ void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize
 
     }
     if (numNode>maxCap){
-        assignParent(endidx,startIdx,maxCap,nodeIDCtr,nodeSize,d,fh);
+        assignParent(endidx,nodeIDCtr,maxCap,nodeIDCtr,nodeSize,d,fh);
     }
 }
 
 
-bool search(int xnode,int d,int maxCap,int nodeSize,vector<int> Point,FileHandler& fh){
+bool search(int xnode,int d,int maxCap,int nodeSize,vector<int>& point,FileHandler& fh){
+    int nodePerPage=PAGE_SIZE/nodeSize;
+    int pageNum=(xnode)/nodePerPage;
+    int offset=((xnode)%nodePerPage)*nodeSize;
+
+    int maxChildId=INT32_MIN;
+
+    PageHandler ph=fh.PageAt(pageNum);
+    char* Data=ph.GetData();  
+    Node P;
+    int additive=0;  
+    memcpy(&P.id,&Data[offset+additive],sizeof(int));
+    additive+=4;
+    memcpy(&P.parentId,&Data[offset+additive],sizeof(int));
+    additive+=4;
+    P.mbr.resize(2*d);
+    for (int i=0;i<2*d;i++){
+        memcpy(&P.mbr[i],&Data[offset+additive],sizeof(int));
+        additive+=4;
+    }
+    P.childId.resize(maxCap,INT32_MIN);
+    for(int i=0;i<maxCap;i++){
+        memcpy(&P.childId[i],&Data[offset+additive],sizeof(int));
+        additive+=4;
+        maxChildId=max(maxChildId,P.childId[i]);
+    }
+    P.childMbr.resize(maxCap);
+    for(int i=0;i<maxCap;i++){
+        for(int j=0;j<d;j++){
+            P.childMbr[i][j]=INT32_MAX;
+            P.childMbr[i][j+d]=INT32_MIN;
+        }
+    }
+    for(int i=0;i<maxCap;i++){
+        for(int j=0;j<2*d;j++){
+            memcpy(&P.childMbr[i][j],&Data[offset+additive],sizeof(int));
+            additive+=4;
+        }
+    }
+    if (maxChildId<0){
+        for (int i=0;i<d;i++){
+            if (point[i]!=P.mbr[i]){
+                return false;
+            }
+        }
+        return true;
+    }
+    else{
+        for(int i=0;i<d;i++){
+            if ((point[i]<P.mbr[i])||(point[i]>P.mbr[i+d])){
+                return false;
+            }            
+        }
+        bool res=false;
+        for(int i=0;i<maxCap;i++){
+            if(P.childId[i]>=0){
+                bool var=true;
+                for(int j=0;j<d;j++){
+                    if ((point[j]<P.childMbr[i][j])||(point[j]>P.childMbr[i][j+d])){
+                        var=false;
+                        break;
+                    }
+                }
+                if (var){
+                    res=res||search(P.childId[i],d,maxCap,nodeSize,point,fh);
+                    if (res==true){
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }   
     
 }
 

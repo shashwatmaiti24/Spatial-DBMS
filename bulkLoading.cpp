@@ -1,5 +1,6 @@
 #include "rtree.hpp"
 #include<iostream>
+#include <fstream>
 #include "file_manager.h"
 #include "errors.h"
 #include <cstring>
@@ -308,6 +309,7 @@ bool search(int xnode,int d,int maxCap,int nodeSize,vector<int>& point,FileHandl
             additive+=4;
         }
     }
+    fh.UnpinPage(pageNum);
     if (maxChildId<0){
         for (int i=0;i<d;i++){
             if (point[i]!=P.mbr[i]){
@@ -344,4 +346,55 @@ bool search(int xnode,int d,int maxCap,int nodeSize,vector<int>& point,FileHandl
     }   
     
 }
+
+
+int main(int argc, char *argv[])
+{
+    const char* query=argv[1];
+    int maxCap=atoi(argv[2]);
+    int d=atoi(argv[3]);
+    char* output=argv[4];
+    ofstream outfile;
+    outfile.open(output);
+    ifstream infile;
+    infile.open(query);
+    char* rtreefilename="rtree.txt";
+    int nodeIDctr=0;
+    int nodeSize=32*(2+2*d+maxCap+maxCap*2*d);
+    int rootNode;
+    vector<int> point(d);
+    while (true) {
+        char* type;
+        int x;
+        infile >> type;
+        if (type[0]=='B'){
+            char* filename;
+            int N;
+            infile>>filename>>N;
+            BulkLoad(d,maxCap,N,filename,rtreefilename,nodeIDctr,nodeSize);
+            rootNode=nodeIDctr;
+        }
+        else if(type[0]=='I'){
+            //INSERT FUNCTION
+            for(int i=0;i<d;i++)infile>>point[i];
+
+        }
+        else{
+            FileManager fm;
+            FileHandler fh=fm.OpenFile(rtreefilename);
+            for(int i=0;i<d;i++)infile>>point[i];
+            bool res=search(rootNode,d,maxCap,nodeSize,point,fh);
+            if(res) outfile<<"TRUE"<<'\n'<<'\n';
+            else outfile<<"FALSE"<<'\n'<<'\n';
+            fm.CloseFile(fh);
+        }
+
+        if( infile.eof() ) break;
+    
+    } 
+
+
+    return 0;
+}
+
 

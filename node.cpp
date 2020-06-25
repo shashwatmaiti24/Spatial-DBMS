@@ -13,6 +13,6 @@ Node::Node(int maxcap,int d){
     childMbr.resize(maxcap);
     for(int i=0;i<maxcap;i++){
         childMbr[i].resize(2*d,INT32_MIN);
-        for(int j=0;j<d;j++) childMbr[i]=INT32_MAX;
+        for(int j=0;j<d;j++) childMbr[i][j]=INT32_MAX;
     }
 }

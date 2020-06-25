@@ -1,8 +1,9 @@
-#include "rtree.hpp"
+
 #include<iostream>
 #include <fstream>
 #include "file_manager.h"
 #include "errors.h"
+#include <vector>
 #include <cstring>
 using namespace std;
 
@@ -10,8 +11,35 @@ const int INT_MIN=-1;
 void flushNode(){
 
 }
-
-int BulkLoad(int d,int maxCap,int N,const char* filename,const char* rtreefilename,int& nodeIDCtr,int nodeSize){
+class Node{
+public:
+	int id;
+	vector<int> mbr;
+	int parentId;
+	vector<int>childId;
+	vector<vector<int>> childMbr;
+	//No need of constructor
+	Node();
+	Node(int maxcap,int d);
+};
+Node::Node(){
+    id=-1;
+    parentId=-1;
+}
+Node::Node(int maxcap,int d){
+    id=-1;
+    parentId=-1;
+    mbr.resize(2*d,INT32_MIN);
+    for(int i=0;i<d;i++) mbr[i]=INT32_MAX;
+    childId.resize(maxcap,INT32_MIN);
+    childMbr.resize(maxcap);
+    for(int i=0;i<maxcap;i++){
+        childMbr[i].resize(2*d,INT32_MIN);
+        for(int j=0;j<d;j++) childMbr[i][j]=INT32_MAX;
+    }
+}
+void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize,int d,FileHandler& fh);
+int BulkLoad(int d,int maxCap,int N,char* filename, char* rtreefilename,int& nodeIDCtr,int nodeSize){
     FileManager fm;
     FileHandler fh = fm.CreateFile(rtreefilename);
     PageHandler rph;
@@ -373,10 +401,12 @@ int main(int argc, char *argv[])
             infile>>filename>>N;
             BulkLoad(d,maxCap,N,filename,rtreefilename,nodeIDctr,nodeSize);
             rootNode=nodeIDctr;
+            outfile<<"BULKLOAD"<<'\n'<<'\n';
         }
         else if(type[0]=='I'){
             //INSERT FUNCTION
             for(int i=0;i<d;i++)infile>>point[i];
+            outfile<<"INSERT"<<'\n'<<'\n';
 
         }
         else{

@@ -256,5 +256,7 @@ void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize
 }
 
 
-
+bool search(int xnode,int d,int maxCap,int nodeSize,vector<int> Point,FileHandler& fh){
+    
+}
 

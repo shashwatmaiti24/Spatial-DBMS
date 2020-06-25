@@ -1,7 +1,7 @@
 sampleobjects = buffer_manager.o file_manager.o bulkLoading.o
 
 sample_run : $(sampleobjects)
-	     g++ -std=c++11 -o sample_run $(sampleobjects)
+	     g++ -std=c++11 -o rtree $(sampleobjects)
 
 rtree.o : bulkLoading.cpp
 	g++ -std=c++11 -c bulkLoading.cpp

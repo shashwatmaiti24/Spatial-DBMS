@@ -48,9 +48,9 @@ int BulkLoad(int d,int maxCap,int N,char* filename, char* rtreefilename,int& nod
     FileManager fm1;
     FileHandler fh1=fm1.OpenFile(filename);   
     PageHandler ph=fh1.FirstPage();
-    PageHandler ph2=fh1.LastPage();
+    //PageHandler ph2=fh1.LastPage();
     int p0=ph.GetPageNum();
-    int p1=ph2.GetPageNum();
+    int p1=fh1.LastPage().GetPageNum();
   
 
     int entryPerPage=PAGE_SIZE/(sizeof(int)*d);
@@ -60,69 +60,69 @@ int BulkLoad(int d,int maxCap,int N,char* filename, char* rtreefilename,int& nod
     }
 
     nodeIDCtr=0;
-    int offset=10000;
+    int offset=0;
     cout<<"Num Pages "<<p1-p0+1<<" == "<<numPage<<endl;
+    rph=fh.NewPage();
+    char* rData;
+    char* data=ph.GetData();
+    int entryCtr=0;
     while(p0<=p1){
-        for(int i=0;i<entryPerPage;i++){
-            char* data=ph.GetData();
+        int upperLimit=min(entryPerPage,N-entryCtr);        
+        for (int i=0;i<upperLimit;i++){
             vector<int> v(d,-1);
-            for (int j=0;j<d;j++){
+            for(int j=0;j<d;j++){
                 memcpy(&v[j],&data[4*i*d+4*j],sizeof(int));
-                cout<<"v["<<i<<"]"<<"["<<j<<"] = "<<v[j];
+                cout<<"v["<<i<<"]"<<"["<<j<<"] = "<<v[j];                
             }
-            cout<<endl;
+            entryCtr++;
 
+            //Flushing page
             if ((PAGE_SIZE-offset)<nodeSize){
-                if (offset<9000){
-                    fh.MarkDirty(rph.GetPageNum());
-                    fh.UnpinPage(rph.GetPageNum());
-                    fh.FlushPages();
-                }
+                fh.MarkDirty(rph.GetPageNum() );
+                fh.UnpinPage(rph.GetPageNum());
                 offset=0;
-                rph=fh.NewPage();                
-            }
-
-            Node N;
-            N.id=nodeIDCtr;
-            nodeIDCtr++;
-            N.parentId=-1;
-            N.mbr.resize(2*d);
-            for (int k=0;k<d;k++){
-                N.mbr[k]=v[k];
-                N.mbr[k+d]=v[k];//Should Be InTMin--Check
-            }
-            N.childId.resize(d,-1);
-            N.childMbr.resize(maxCap);
-            for(int ctr=0;ctr<maxCap;ctr++){
-                N.childMbr[ctr].resize(2*d,INT32_MIN);
-            }
-            //Flush Node
-            char* rphData=rph.GetData();
-            int additive=0;
-            memcpy(&rphData[offset+additive],&N.id,sizeof(int));
-            additive+=4;
-            memcpy(&rphData[offset+additive],&N.parentId,sizeof(int));
-            additive+=4;
-            for (int i=0;i<N.mbr.size();i++){
-                memcpy(&rphData[offset+additive],&N.mbr[i],sizeof(int));
-                additive+=4;
-            }
-            for (int i=0;i<N.childId.size();i++){
-                memcpy(&rphData[offset+additive],&N.childId[i],sizeof(int));
-                additive+=4;
-            }
-            for (int i=0;i<N.childMbr.size();i++){
-                for(int j=0;j<2*d;j++){
-                    memcpy(&rphData[offset+additive],&N.mbr[i],sizeof(int));
-                    additive+=4;
+                if (entryCtr<N){
+                    rph=fh.NewPage();
                 }
+                else break;
             }
-            offset=offset+additive;
 
+            //Making Node
+            Node n(maxCap,d);
+            n.id=nodeIDCtr;
+            nodeIDCtr++;            
+            for(int i=0;i<d;i++){
+                n.mbr[i]=v[i];
+                n.mbr[i+d]=v[i];
+            }
+
+            //Writing Node of RTree Page            
+            memcpy(&rData[offset],&n.id,sizeof(int));
+            offset+=4;
+            memcpy(&rData[offset],&n.parentId,sizeof(int));
+            offset+=4;
+            for (int i=0;i<n.mbr.size();i++){
+                memcpy(&rData[offset],&n.mbr[i],sizeof(int));
+                offset+=4;
+            }
+            for (int i=0;i<n.childId.size();i++){
+                memcpy(&rData[offset],&n.childId[i],sizeof(int));
+                offset+=4;
+            }
+            for (int i=0;i<n.childMbr.size();i++){
+                for(int j=0;j<2*d;j++){
+                    memcpy(&rData[offset],&n.mbr[i],sizeof(int));
+                    offset+=4;
+                }
+            }           
         }
-        ph=fh1.NextPage(ph.GetPageNum());
-        p0=ph.GetPageNum();
-    }
+        if (entryCtr<N){
+            p0++;
+            fh1.UnpinPage(p0);
+            ph=fh1.PageAt(p0);
+            data=ph.GetData();                        
+        } else break;
+    }    
     assignParent(0,nodeIDCtr,maxCap,nodeIDCtr,nodeSize,d,fh);
     fm.CloseFile(fh);
     fm1.CloseFile(fh1);

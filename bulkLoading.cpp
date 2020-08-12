@@ -26,6 +26,7 @@ Node::Node(){
     id=-1;
     parentId=-1;
 }
+
 Node::Node(int maxcap,int d){
     id=-1;
     parentId=-1;
@@ -60,14 +61,16 @@ int BulkLoad(int d,int maxCap,int N,char* filename, char* rtreefilename,int& nod
 
     nodeIDCtr=0;
     int offset=10000;
-    cout<<"Num Pages 1"<<p1-p0+1<<" == "<<numPage<<endl;
+    cout<<"Num Pages "<<p1-p0+1<<" == "<<numPage<<endl;
     while(p0<=p1){
         for(int i=0;i<entryPerPage;i++){
             char* data=ph.GetData();
             vector<int> v(d,-1);
             for (int j=0;j<d;j++){
                 memcpy(&v[j],&data[4*i*d+4*j],sizeof(int));
+                cout<<"v["<<i<<"]"<<"["<<j<<"] = "<<v[j];
             }
+            cout<<endl;
 
             if ((PAGE_SIZE-offset)<nodeSize){
                 if (offset<9000){

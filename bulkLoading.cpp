@@ -51,7 +51,7 @@ int BulkLoad(int d,int maxCap,int N,char* filename, char* rtreefilename,int& nod
     //PageHandler ph2=fh1.LastPage();
     int p0=ph.GetPageNum();
     int p1=fh1.LastPage().GetPageNum();
-  
+    fh1.UnpinPage(p1);
 
     int entryPerPage=PAGE_SIZE/(sizeof(int)*d);
     int numPage=N/entryPerPage;
@@ -72,8 +72,9 @@ int BulkLoad(int d,int maxCap,int N,char* filename, char* rtreefilename,int& nod
             vector<int> v(d,-1);
             for(int j=0;j<d;j++){
                 memcpy(&v[j],&data[4*i*d+4*j],sizeof(int));
-                cout<<"v["<<i<<"]"<<"["<<j<<"] = "<<v[j];                
+                cout<<"v["<<i<<"]"<<"["<<j<<"] = "<<v[j]<<" ";                
             }
+            cout<<endl;
             entryCtr++;
 
             //Flushing page
@@ -116,17 +117,17 @@ int BulkLoad(int d,int maxCap,int N,char* filename, char* rtreefilename,int& nod
                 }
             }           
         }
-        if (entryCtr<N){
-            p0++;
+        if (entryCtr<N){            
             fh1.UnpinPage(p0);
+            p0++;
             ph=fh1.PageAt(p0);
             data=ph.GetData();                        
         } else break;
-    }    
+    }
+    cout<<N<<" NUM of Nodes and NodedIDCtr "<<nodeIDCtr<<endl;    
     assignParent(0,nodeIDCtr,maxCap,nodeIDCtr,nodeSize,d,fh);
     fm.CloseFile(fh);
-    fm1.CloseFile(fh1);
-    
+    fm1.CloseFile(fh1);    
 }
 
 void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize,int d,FileHandler& fh){
@@ -135,163 +136,226 @@ void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize
     int startPidx=endidx;
     int block=numNode/maxCap;
     int blockRem=numNode%maxCap;
+    int numNodeCreated=0;
 
     int nodePerPage=PAGE_SIZE/nodeSize;
-    int pageNum=(endidx)/nodePerPage;
+    int pageNum=(endidx)/nodePerPage;    
     int offset=((endidx)%nodePerPage)*nodeSize;
     PageHandler rph;
     if (offset=0){
         rph=fh.NewPage();
     }
-    for (int i=0;i<block;i++){
-        if ((PAGE_SIZE-offset)<nodeSize){
-            fh.MarkDirty(pageNum);
-            fh.UnpinPage(pageNum);
-            fh.FlushPages();
-            rph=fh.NewPage();
-            pageNum=rph.GetPageNum();
-        }
-        Node P;
-        P.id=nodeIDCtr;
-        nodeIDCtr++;
-        P.parentId=-1;
-        P.mbr.resize(2*d);
-        for(int i=0;i<d;i++){
-            P.mbr[i]=INT32_MAX;
-            P.mbr[i+d]=INT32_MIN;
-        }
-        P.childId.resize(maxCap,INT32_MIN);
-        P.childMbr.resize(maxCap);
-        for(int i=0;i<maxCap;i++){
-            for(int j=0;j<d;j++){
-                P.childMbr[i][j]=INT32_MAX;
-                P.childMbr[i][j+d]=INT32_MIN;
-            }
-        }
-        for(int j=0;j<maxCap;j++){
-            int childPnum=startIdx/nodePerPage;
-            P.childId[j]=startIdx;
-            startIdx++;
-
-            PageHandler childPage=fh.PageAt(childPnum);
-            char* childData=childPage.GetData();
-            int childOffset=startIdx%nodePerPage*nodeSize;
-            memcpy(&childData[offset+4],&P.id,sizeof(int));
-            vector<int> childmbr(2*d);
-            P.childMbr[j].resize(2*d);
-            for (int i=0;i<2*d;i++){
-                int mbrCordinate=-1;
-                memcpy(&mbrCordinate,&childData[offset+8+4*i],sizeof(int));
-                P.childMbr[j][i]=mbrCordinate;
-                if (i<d){
-                    P.mbr[i]=min(P.mbr[i],mbrCordinate);
-                }
-                else{
-                    P.mbr[i]=max(P.mbr[i],mbrCordinate);
-                }
-            }
-            fh.MarkDirty(childPnum);
-            fh.UnpinPage(childPnum);
-            fh.FlushPages();
-        }
-        //Flush Node
-            char* rphData=rph.GetData();
-            int additive=0;
-            memcpy(&rphData[offset+additive],&P.id,sizeof(int));
-            additive+=4;
-            memcpy(&rphData[offset+additive],&P.parentId,sizeof(int));
-            additive+=4;
-            for (int i=0;i<P.mbr.size();i++){
-                memcpy(&rphData[offset+additive],&P.mbr[i],sizeof(int));
-                additive+=4;
-            }
-            for (int i=0;i<P.childId.size();i++){
-                memcpy(&rphData[offset+additive],&P.childId[i],sizeof(int));
-                additive+=4;
-            }
-            for (int i=0;i<P.childMbr.size();i++){
-                for(int j=0;j<2*d;j++){
-                    memcpy(&rphData[offset+additive],&P.childMbr[i][j],sizeof(int));
-                    additive+=4;
-                }
-            }
-            offset=offset+additive;           
-
+    else{
+        rph=fh.PageAt(pageNum);
     }
-    if (numNode%maxCap!=0){
-        if ((PAGE_SIZE-offset)<nodeSize){
-            fh.MarkDirty(pageNum);
-            fh.UnpinPage(pageNum);
-            fh.FlushPages();
-            rph=fh.NewPage();
-            pageNum=rph.GetPageNum();
-        }
-        Node P;
-        P.id=nodeIDCtr;
-        nodeIDCtr++;
-        P.parentId=-1;
-        P.mbr.resize(2*d);
-        for(int i=0;i<d;i++){
-            P.mbr[i]=INT32_MAX;
-            P.mbr[i+d]=INT32_MIN;
-        }
-        P.childId.resize(maxCap,INT32_MIN);
-        P.childMbr.resize(maxCap);
-        for(int i=0;i<maxCap;i++){
-            for(int j=0;j<d;j++){
-                P.childMbr[i][j]=INT32_MAX;
-                P.childMbr[i][j+d]=INT32_MIN;
-            }
-        }
-        for(int j=0;j<numNode%maxCap;j++){
-            int childPnum=startIdx/nodePerPage;
-            P.childId[j]=startIdx;
-            startIdx++;
-
-            PageHandler childPage=fh.PageAt(childPnum);
-            char* childData=childPage.GetData();
-            int childOffset=startIdx%nodePerPage*nodeSize;
-            memcpy(&childData[offset+4],&P.id,sizeof(int));
-            vector<int> childmbr(2*d);
-            P.childMbr[j].resize(2*d);
+    char* rData=rph.GetData();
+    while(startIdx<endidx){
+        int remainderNode=min(maxCap,endidx-startIdx);
+        Node p(maxCap,d);
+        p.id=nodeIDCtr++;
+        p.parentId=-1;
+        for (int j=0;j<remainderNode;j++){         
             
-            for (int i=0;i<2*d;i++){
+            int childPageNum=startIdx/nodeSize;
+            int childOffset=startIdx%nodePerPage*nodeSize;
+            p.childId[j]=startIdx++;
+            PageHandler childPage=fh.PageAt(childPageNum);
+            char* cData=childPage.GetData();
+            memcpy(cData[offset+4],&p.id,sizeof(int));
+            for (int k=0;k<2*d;k++){
                 int mbrCordinate=-1;
-                memcpy(&mbrCordinate,&childData[offset+8+4*i],sizeof(int));
-                P.childMbr[j][i]=mbrCordinate;
-                if (i<d){
-                    P.mbr[i]=min(P.mbr[i],mbrCordinate);
+                memcpy(&mbrCordinate,&cData[offset+8+4*i],sizeof(int));
+                p.childMbr[j][k]=mbrCordinate;
+                if (k<d){
+                    p.mbr[k]=min(p.mbr[k],mbrCordinate);
                 }
                 else{
-                    P.mbr[i]=max(P.mbr[i],mbrCordinate);
+                    p.mbr[k]=max(p.mbr[k],mbrCordinate);
                 }
             }
-            fh.MarkDirty(childPnum);
-            fh.UnpinPage(childPnum);
-            fh.FlushPages();
+            fh.MarkDirty(childPageNum);
+            fh.UnpinPage(childPageNum);
+            
         }
-        //Flush Node
-            char* rphData=rph.GetData();
-            int additive=0;
-            memcpy(&rphData[offset+additive],&P.id,sizeof(int));
-            additive+=4;
-            memcpy(&rphData[offset+additive],&P.parentId,sizeof(int));
-            additive+=4;
-            for (int i=0;i<P.mbr.size();i++){
-                memcpy(&rphData[offset+additive],&P.mbr[i],sizeof(int));
-                additive+=4;
+        numNodeCreated++;
+        //Flushing Parent Node
+        if ((PAGE_SIZE-offset)<nodeSize){            
+            fh.MarkDirty(pageNum);
+            fh.UnpinPage(pageNum);
+            offset=0;
+            pageNum++;
+            rph=fh.NewPage();
+            rData=rph.GetData();
+        }
+        //Writing Data to rData
+        memcpy(&rData[offset],&p.id,sizeof(int));
+        offset+=4;
+        memcpy(&rData[offset],&p.parentId,sizeof(int));
+        offset+=4;
+        for (int i=0;i<p.mbr.size();i++){
+            memcpy(&rData[offset],&p.mbr[i],sizeof(int));
+            offset+=4;
+        }
+        for (int i=0;i<p.childId.size();i++){
+            memcpy(&rData[offset],&p.childId[i],sizeof(int));
+            offset+=4;
+        }
+        for (int i=0;i<p.childMbr.size();i++){
+            for(int j=0;j<2*d;j++){
+                memcpy(&rData[offset],&p.mbr[i],sizeof(int));
+                offset+=4;
             }
-            for (int i=0;i<P.childId.size();i++){
-                memcpy(&rphData[offset+additive],&P.childId[i],sizeof(int));
-                additive+=4;
-            }
-            for (int i=0;i<P.childMbr.size();i++){
-                for(int j=0;j<2*d;j++){
-                    memcpy(&rphData[offset+additive],&P.childMbr[i][j],sizeof(int));
-                    additive+=4;
-                }
-            }
-            offset=offset+additive;         
+        }
+    }
+    // for (int i=0;i<block;i++){
+    //     if ((PAGE_SIZE-offset)<nodeSize){
+    //         fh.MarkDirty(pageNum);
+    //         fh.UnpinPage(pageNum);
+    //         fh.FlushPages();
+    //         rph=fh.NewPage();
+    //         pageNum=rph.GetPageNum();
+    //     }
+    //     Node P;
+    //     P.id=nodeIDCtr;
+    //     nodeIDCtr++;
+    //     P.parentId=-1;
+    //     P.mbr.resize(2*d);
+    //     for(int i=0;i<d;i++){
+    //         P.mbr[i]=INT32_MAX;
+    //         P.mbr[i+d]=INT32_MIN;
+    //     }
+    //     P.childId.resize(maxCap,INT32_MIN);
+    //     P.childMbr.resize(maxCap);
+    //     for(int i=0;i<maxCap;i++){
+    //         for(int j=0;j<d;j++){
+    //             P.childMbr[i][j]=INT32_MAX;
+    //             P.childMbr[i][j+d]=INT32_MIN;
+    //         }
+    //     }
+    //     for(int j=0;j<maxCap;j++){
+    //         int childPnum=startIdx/nodePerPage;
+    //         P.childId[j]=startIdx;
+    //         startIdx++;
+
+    //         PageHandler childPage=fh.PageAt(childPnum);
+    //         char* childData=childPage.GetData();
+    //         int childOffset=startIdx%nodePerPage*nodeSize;
+    //         memcpy(&childData[offset+4],&P.id,sizeof(int));
+    //         vector<int> childmbr(2*d);
+    //         P.childMbr[j].resize(2*d);
+    //         for (int i=0;i<2*d;i++){
+    //             int mbrCordinate=-1;
+    //             memcpy(&mbrCordinate,&childData[offset+8+4*i],sizeof(int));
+    //             P.childMbr[j][i]=mbrCordinate;
+    //             if (i<d){
+    //                 P.mbr[i]=min(P.mbr[i],mbrCordinate);
+    //             }
+    //             else{
+    //                 P.mbr[i]=max(P.mbr[i],mbrCordinate);
+    //             }
+    //         }
+    //         fh.MarkDirty(childPnum);
+    //         fh.UnpinPage(childPnum);
+    //         fh.FlushPages();
+    //     }
+    //     //Flush Node
+    //         char* rphData=rph.GetData();
+    //         int additive=0;
+    //         memcpy(&rphData[offset+additive],&P.id,sizeof(int));
+    //         additive+=4;
+    //         memcpy(&rphData[offset+additive],&P.parentId,sizeof(int));
+    //         additive+=4;
+    //         for (int i=0;i<P.mbr.size();i++){
+    //             memcpy(&rphData[offset+additive],&P.mbr[i],sizeof(int));
+    //             additive+=4;
+    //         }
+    //         for (int i=0;i<P.childId.size();i++){
+    //             memcpy(&rphData[offset+additive],&P.childId[i],sizeof(int));
+    //             additive+=4;
+    //         }
+    //         for (int i=0;i<P.childMbr.size();i++){
+    //             for(int j=0;j<2*d;j++){
+    //                 memcpy(&rphData[offset+additive],&P.childMbr[i][j],sizeof(int));
+    //                 additive+=4;
+    //             }
+    //         }
+    //         offset=offset+additive;           
+
+    // }
+    // if (numNode%maxCap!=0){
+    //     if ((PAGE_SIZE-offset)<nodeSize){
+    //         fh.MarkDirty(pageNum);
+    //         fh.UnpinPage(pageNum);
+    //         fh.FlushPages();
+    //         rph=fh.NewPage();
+    //         pageNum=rph.GetPageNum();
+    //     }
+    //     Node P;
+    //     P.id=nodeIDCtr;
+    //     nodeIDCtr++;
+    //     P.parentId=-1;
+    //     P.mbr.resize(2*d);
+    //     for(int i=0;i<d;i++){
+    //         P.mbr[i]=INT32_MAX;
+    //         P.mbr[i+d]=INT32_MIN;
+    //     }
+    //     P.childId.resize(maxCap,INT32_MIN);
+    //     P.childMbr.resize(maxCap);
+    //     for(int i=0;i<maxCap;i++){
+    //         for(int j=0;j<d;j++){
+    //             P.childMbr[i][j]=INT32_MAX;
+    //             P.childMbr[i][j+d]=INT32_MIN;
+    //         }
+    //     }
+    //     for(int j=0;j<numNode%maxCap;j++){
+    //         int childPnum=startIdx/nodePerPage;
+    //         P.childId[j]=startIdx;
+    //         startIdx++;
+
+    //         PageHandler childPage=fh.PageAt(childPnum);
+    //         char* childData=childPage.GetData();
+    //         int childOffset=startIdx%nodePerPage*nodeSize;
+    //         memcpy(&childData[offset+4],&P.id,sizeof(int));
+    //         vector<int> childmbr(2*d);
+    //         P.childMbr[j].resize(2*d);
+            
+    //         for (int i=0;i<2*d;i++){
+    //             int mbrCordinate=-1;
+    //             memcpy(&mbrCordinate,&childData[offset+8+4*i],sizeof(int));
+    //             P.childMbr[j][i]=mbrCordinate;
+    //             if (i<d){
+    //                 P.mbr[i]=min(P.mbr[i],mbrCordinate);
+    //             }
+    //             else{
+    //                 P.mbr[i]=max(P.mbr[i],mbrCordinate);
+    //             }
+    //         }
+    //         fh.MarkDirty(childPnum);
+    //         fh.UnpinPage(childPnum);
+    //         fh.FlushPages();
+    //     }
+    //     //Flush Node
+    //         char* rphData=rph.GetData();
+    //         int additive=0;
+    //         memcpy(&rphData[offset+additive],&P.id,sizeof(int));
+    //         additive+=4;
+    //         memcpy(&rphData[offset+additive],&P.parentId,sizeof(int));
+    //         additive+=4;
+    //         for (int i=0;i<P.mbr.size();i++){
+    //             memcpy(&rphData[offset+additive],&P.mbr[i],sizeof(int));
+    //             additive+=4;
+    //         }
+    //         for (int i=0;i<P.childId.size();i++){
+    //             memcpy(&rphData[offset+additive],&P.childId[i],sizeof(int));
+    //             additive+=4;
+    //         }
+    //         for (int i=0;i<P.childMbr.size();i++){
+    //             for(int j=0;j<2*d;j++){
+    //                 memcpy(&rphData[offset+additive],&P.childMbr[i][j],sizeof(int));
+    //                 additive+=4;
+    //             }
+    //         }
+    //         offset=offset+additive;         
 
 
     }

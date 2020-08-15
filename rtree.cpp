@@ -1,607 +1,368 @@
-#include "rtree.hpp"
+
 #include<iostream>
+#include <fstream>
 #include "file_manager.h"
 #include "errors.h"
+#include <vector>
 #include <cstring>
 using namespace std;
 
-void RTree::inserrt(int xNode, std::vector<int> P, const char* filename){
-//		get the root node from the page
-    FileManager fm1;
-    FileHandler fh1=fm1.OpenFile(filename);
-	int nodeSize = sizeof(Node);
-    int nodePerPage=PAGE_SIZE/nodeSize;
-	int pageNum = xNode/nodePerPage;
-	PageHandler ph = fh1.PageAt(pageNum);
-	char *data = ph.GetData ();
-    Node RN;
-	memcpy (&RN, &data[xNode%nodePerPage], sizeof(Node));
-	Node Leaf = ChooseLeaf(RN, P);
-	if(maxCap>Leaf.nchild){
-		for(int i=0; i<d; i++){
-			Leaf.childMbr[Leaf.nchild][i+d] = P[i];
-		}
-		Leaf.childId[Leaf.nchild] = 0;
-		Leaf.nchild+=1;
-		return;
-	}
-	Node NN = SplitNode(P, -1, Leaf);
-	while(Leaf.parentId!=RN.id){
-		Node parent;
-		memcpy (&parent, &data[0], sizeof(Node));
-		if(maxCap>parent.nchild){
-			for(int i=0; i<d; i++){
-				parent.childMbr[parent.nchild][i+d] = P[i];
-			}
-			parent.childId[parent.nchild] = NN.id;
-			parent.nchild+=1;
-		}
-		Node NN = SplitNode(NN.mbr, NN.id, parent);
-	}
-//      Code from step 10
-}
-Node RTree::ChooseLeaf(Node N, std::vector<int>P){
-	for(int i=0; i<d; i++){
-		N.mbr[i] = min(N.mbr[i],N.mbr[i+d],P[i]);
-		N.mbr[i+d] = max(N.mbr[i],N.mbr[i+d],P[i]);
-	}
-	if(N.leaf){
-		return N;
-	}
-	int minarea;
-	int area=1;
-	int newmbr[2*d];	
-	for(int i=0; i<d; i++){
-		area*=(N.childMbr[0][i]-N.childMbr[0][i+d]);
-		newmbr[i] = min(N.childMbr[0][i],N.childMbr[0][i+d],P[i]);
-		newmbr[i+d] = max(N.childMbr[0][i],N.childMbr[0][i+d],P[i]);
-	}
-	int newarea=1;
-	for(int i=0; i<d; i++){
-		newarea*=(newmbr[i]-newmbr[i+d]);
-	}
-	minarea=area;
-	int mindiff = 0;
-	int mindiffarea = newarea-area;
-	int i = 1;
-	while(i<maxCap and N.childId[i]!=-1){
-		area=1;
-		int newmbr[2*d];
-		for(int j=0; j<d; j++){
-			area*=(N.childMbr[i][j]-N.childMbr[i][j+d]);
-			newmbr[j] = min(N.childMbr[i][j],N.childMbr[i][j+d],P[j]);
-			newmbr[j+d] = max(N.childMbr[i][j],N.childMbr[i][j+d],P[j]);
-		}
-		newarea=1;
-		for(int j=0; j<d; j++){
-			newarea*=(newmbr[j]-newmbr[j+d]);
-		}
-		if(mindiffarea>newarea-area){
-			mindiffarea=newarea-area;
-			mindiff=i;
-			minarea = area;
-		}else if (mindiffarea==newarea-area){
-			if(minarea>area){
-				minarea = area;
-				mindiff = i;
-			}
-		}
-		i++;
-	}
-	// Get the node corresponding to mindiff from page
-	N;
-	ChooseLeaf(N, P);
-}
-Node RTree::SplitNode(std::vector<int> P, int newentryid, Node L){
-	Node LL;
-	if (L.leaf)
-	{
-		int maxdist = 0;
-		int s1 = 0;
-		int s2 = 1;
-		for (int i = 0; i < maxCap-1; ++i)
-		{
-			for (int j = i+1; j < maxCap; ++j)
-			{
-				int dist = 0;
-				for(int k = d; k<2*d; ++k){
-					int t = (L.childMbr[i][k]-L.childMbr[j][k]);
-					dist+=t*t;
-				}
-				if(dist>maxdist){
-					dist = maxdist;
-					s1 = i;
-					s2 = j;
-				}
-			}
-		}
-		int dist = 0;
-		for(int k = d; k<2*d; ++k){
-			int t = (L.childMbr[s1][k]-P[k]);
-			dist+=t*t;
-		}
-		if(dist>maxdist){
-			dist = maxdist;
-			s2 = -1;
-		}
-		dist = 0;
-		for(int k = d; k<2*d; ++k){
-			int t = (L.childMbr[s2][k]-P[k]);
-			dist+=t*t;
-		}
-		if(dist>maxdist){
-			dist = maxdist;
-			s1 = -1;
-		}
-		for(int k = d; k<2*d; ++k){
-			if(s1!=-1){
-				L.childMbr[0][k] = L.childMbr[s1][k];
-				L.mbr[k-d] = L.childMbr[s1][k];
-				L.mbr[k] = L.childMbr[s1][k];
-			}else{
-				L.childMbr[0][k] = P[k];
-				L.mbr[k-d] = P[k];
-				L.mbr[k] = P[k];
-			}
-		}
-		for(int k = d; k<2*d; ++k){
-			if(s2!=-1){
-				LL.childMbr[0][k] = L.childMbr[s2][k];
-				LL.mbr[k-d] = L.childMbr[s2][k];
-				LL.mbr[k] = L.childMbr[s2][k];
-			}else{
-				LL.childMbr[0][k] = P[k];
-				LL.mbr[k-d] = P[k];
-				LL.mbr[k] = P[k];
-			}
-		}
-		int area1=0;
-		int area2=0;
-		int e1 = 1;
-		int e2 = 1;
-		for(int i = 0; i < maxCap; ++i){
-			if(i!=s1 and i!=s2){
-				std::vector<int> newmbr1;
-				std::vector<int> newmbr2;	
-				for(int j=0; j<d; j++){
-					newmbr1[j] = min(L.mbr[j],L.childMbr[i][j+d],L.mbr[j+d]);
-					newmbr1[j+d] = max(L.mbr[j],L.childMbr[i][j+d],L.mbr[j+d]);
-					newmbr2[j] = min(L.mbr[j],L.childMbr[i][j+d],L.mbr[j+d]);
-					newmbr2[j+d] = max(L.mbr[j],L.childMbr[i][j+d],L.mbr[j+d]);
-				}
-				int newarea1=1;
-				int newarea2=1;
-				for(int i=0; i<d; i++){
-					newarea1*=(newmbr1[i]-newmbr1[i+d]);
-					newarea2*=(newmbr2[i]-newmbr2[i+d]);
-				}
-				if(newarea1==newarea2){
-					if(area1==area2){
-						if(e1<e2){
-							L.mbr = newmbr1;
-							area1 = newarea1;
-							for(int k = d; k<2*d; ++k){
-								L.childMbr[e1][k] = L.childMbr[i][k];
-							}
-							L.childId[e1] = 0;
-						}else{
-							LL.mbr = newmbr2;
-							area2 = newarea2;
-							for(int k = d; k<2*d; ++k){
-								LL.childMbr[e2][k] = L.childMbr[i][k];
-							}
-							LL.childId[e2] = 0;
+const int INT_MIN=-1;
+void flushNode(){
 
-						}
-					}else if(area1<area2){
-						L.mbr = newmbr1;
-						area1 = newarea1;
-						for(int k = d; k<2*d; ++k){
-							L.childMbr[e1][k] = L.childMbr[i][k];
-							
-						}
-						L.childId[e1] = 0;
-					}else{
-						LL.mbr = newmbr2;
-						area2 = newarea2;
-						for(int k = d; k<2*d; ++k){
-							LL.childMbr[e2][k] = L.childMbr[i][k];
-							
-						}
-						LL.childId[e2] = 0;
-					}
-				}else if(newarea1<newarea2){
-					L.mbr = newmbr1;
-					area1 = newarea1;
-					for(int k = d; k<2*d; ++k){
-						L.childMbr[e1][k] = L.childMbr[i][k];
-						
-					}
-					L.childId[e1] = 0;
-				}else{
-					LL.mbr = newmbr2;
-					area2 = newarea2;
-					for(int k = d; k<2*d; ++k){
-						LL.childMbr[e2][k] = L.childMbr[i][k];
-						
-					}
-					LL.childId[e2] = 0;
-				}
-			}
-		}
-		if(s1!=-1 and s2!=-1){
-			std::vector<int> newmbr1;
-			std::vector<int> newmbr2;	
-			for(int j=0; j<d; j++){
-				newmbr1[j] = min(L.mbr[j],P[d],L.mbr[j+d]);
-				newmbr1[j+d] = max(L.mbr[j],P[d],L.mbr[j+d]);
-				newmbr2[j] = min(L.mbr[j],P[d],L.mbr[j+d]);
-				newmbr2[j+d] = max(L.mbr[j],P[d],L.mbr[j+d]);
-			}
-			int newarea1=1;
-			int newarea2=1;
-			for(int i=0; i<d; i++){
-				newarea1*=(newmbr1[i]-newmbr1[i+d]);
-				newarea2*=(newmbr2[i]-newmbr2[i+d]);
-			}
-			if(newarea1==newarea2){
-				if(area1==area2){
-					if(e1<e2){
-						L.mbr = newmbr1;
-						area1 = newarea1;
-						for(int k = d; k<2*d; ++k){
-							L.childMbr[e1][k] = P[k];
-							
-						}
-						L.childId[e1] = 0;
-					}else{
-						LL.mbr = newmbr2;
-						area2 = newarea2;
-						for(int k = d; k<2*d; ++k){
-							LL.childMbr[e2][k] = P[k];
-							
-						}
-						LL.childId[e2] = 0;
-					}
-				}else if(area1<area2){
-					L.mbr = newmbr1;
-					area1 = newarea1;
-					for(int k = d; k<2*d; ++k){
-						L.childMbr[e1][k] = P[k];
-						
-					}
-					L.childId[e1] = 0;
-				}else{
-					LL.mbr = newmbr2;
-					area2 = newarea2;
-					for(int k = d; k<2*d; ++k){
-						LL.childMbr[e2][k] = P[k];
-						
-					}
-					LL.childId[e2] = 0;
-				}
-			}else if(newarea1<newarea2){
-				L.mbr = newmbr1;
-				area1 = newarea1;
-				for(int k = d; k<2*d; ++k){
-					L.childMbr[e1][k] = P[k];
-					
-				}
-				L.childId[e1] = 0;
-			}else{
-				LL.mbr = newmbr2;
-				area2 = newarea2;
-				for(int k = d; k<2*d; ++k){
-					LL.childMbr[e2][k] = P[k];
-					
-				}
-				LL.childId[e2] = 0;
-			}
-		}
-	}
-	else{
-		int s1 = 0;
-		int s2 = 1;
-		int maxdiff = 0;
-		for (int i = 0; i < maxCap-1; ++i)
-		{
-			for (int j = i+1; j < maxCap; ++j)
-			{
-				int jarea = 1;
-				int area1 = 1;
-				int area2 = 1;
-				int jmbr[2*d];
-				for(int k = 0; k<d; ++k){
-					area1*=(L.childMbr[i][k+d]-L.childMbr[i][k]);
-					area2*=(L.childMbr[j][k+d]-L.childMbr[j][k]);
-					jmbr[k] = min(L.childMbr[i][k], L.childMbr[j][k]);
-					jmbr[k+d] = max(L.childMbr[i][k+d], L.childMbr[j][k+d]);
-				}
-				for(int k = 0; k<d; ++k){
-					jarea*=(jmbr[k+d]-jmbr[k]);
-				}
-				if(jarea-area1-area2>maxdiff){
-					maxdiff = jarea-area1-area2;
-					s1 = i;
-					s2 = j;
-				}
-			}
-		}
-		int jarea1 = 1;
-		int jarea2 = 1;
-		int area1 = 1;
-		int area2 = 1;
-		int areap = 1;
-		int jmbr1[2*d];
-		int jmbr2[2*d];
-		for(int k = 0; k<d; ++k){
-			area1*=(L.childMbr[s1][k+d]-L.childMbr[s1][k]);
-			area2*=(L.childMbr[s2][k+d]-L.childMbr[s2][k]);
-			areap*=(P[k+d]-P[k]);
-			jmbr1[k] = min(L.childMbr[s1][k], P[k]);
-			jmbr1[k+d] = max(L.childMbr[s1][k+d], P[k+d]);
-		}
-		for(int k = 0; k<d; ++k){
-			jarea1*=(jmbr1[k+d]-jmbr1[k]);
-		}
-		if(jarea1-area1-areap>maxdiff){
-			maxdiff = jarea1-area1-areap;
-			s2 = -1;
-		}
-		for(int k = 0; k<d; ++k){
-			jarea1*=(jmbr1[k+d]-jmbr1[k]);
-		}
-		if(jarea1-area2-areap>maxdiff){
-			maxdiff = jarea2-area2-areap;
-			s1 = -1;
-		}
-		for(int k = 0; k<2*d; ++k){
-			if(s1!=-1){
-				L.childMbr[0][k] = L.childMbr[s1][k];
-				L.mbr[k-d] = L.childMbr[s1][k];
-				L.mbr[k] = L.childMbr[s1][k];
-			}else{
-				L.childMbr[0][k] = P[k];
-				L.mbr[k-d] = P[k];
-				L.mbr[k] = P[k];
-			}
-		}
-		for(int k = 0; k<2*d; ++k){
-			if(s2!=-1){
-				LL.childMbr[0][k] = L.childMbr[s2][k];
-				LL.mbr[k-d] = L.childMbr[s2][k];
-				LL.mbr[k] = L.childMbr[s2][k];
-			}else{
-				LL.childMbr[0][k] = P[k];
-				LL.mbr[k-d] = P[k];
-				LL.mbr[k] = P[k];
-			}
-		}
-		if(s1!=-1){
-			L.childId[0] = L.childId[s1];
-		}else{
-			L.childId[0] = newentryid;
-		}
-		if(s2!=-1){
-			LL.childId[0] = L.childId[s2];
-		}else{
-			LL.childId[0] = newentryid;
-		}
-		area1=0;
-		area2=0;
-		int e1 = 1;
-		int e2 = 1;
-		for(int i = 0; i < maxCap; ++i){
-			if(i!=s1 and i!=s2){
-				std::vector<int> newmbr1;
-				std::vector<int> newmbr2;	
-				for(int j=0; j<d; i++){
-					newmbr1[j] = min(L.mbr[j],L.childMbr[i][j]);
-					newmbr1[j+d] = max(L.mbr[j+d],L.childMbr[i][j+d]);
-					newmbr2[j] = min(L.mbr[j],L.childMbr[i][j]);
-					newmbr2[j+d] = max(L.mbr[j+d],L.childMbr[i][j+d]);
-				}
-				int newarea1=1;
-				int newarea2=1;
-				for(int j=0; j<d; j++){
-					newarea1*=(newmbr1[j]-newmbr1[j+d]);
-					newarea2*=(newmbr2[j]-newmbr2[j+d]);
-				}
-				if(newarea1==newarea2){
-					if(area1==area2){
-						if(e1<e2){
-							L.mbr = newmbr1;
-							area1 = newarea1;
-							for(int k=0; k<2*d; ++k){
-								L.childMbr[e1][k] = L.childMbr[i][k];
-							}
-							L.childId[e1] = L.childId[i];
-						}else{
-							LL.mbr = newmbr2;
-							area2 = newarea2;
-							for(int k=0; k<2*d; ++k){
-								LL.childMbr[e2][k] = L.childMbr[i][k];
-							}
-							LL.childId[e2] = L.childId[i];
-						}
-					}else if(area1<area2){
-						L.mbr = newmbr1;
-						area1 = newarea1;
-						for(int k=0; k<2*d; ++k){
-							L.childMbr[e1][k] = L.childMbr[i][k];
-						}
-						L.childId[e1] = L.childId[i];
-					}else{
-						LL.mbr = newmbr2;
-						area2 = newarea2;
-						for(int k=0; k<2*d; ++k){
-							LL.childMbr[e2][k] = L.childMbr[i][k];
-						}
-						LL.childId[e2] = L.childId[i];
-					}
-				}else if(newarea1<newarea2){
-					L.mbr = newmbr1;
-					area1 = newarea1;
-					for(int k=0; k<2*d; ++k){
-						L.childMbr[e1][k] = L.childMbr[i][k];
-					}
-					L.childId[e1] = L.childId[i];
-				}else{
-					LL.mbr = newmbr2;
-					area2 = newarea2;
-					for(int k=0; k<2*d; ++k){
-						LL.childMbr[e2][k] = L.childMbr[i][k];
-					}
-					LL.childId[e2] = L.childId[i];
-				}
-			}
-		}
-		if(s1!=-1 and s2!=-1){
-			std::vector<int> newmbr1;
-			std::vector<int> newmbr2;	
-			for(int j=0; j<d; j++){
-				newmbr1[j] = min(L.mbr[j],P[j]);
-				newmbr1[j+d] = max(L.mbr[j+d],P[j+d]);
-				newmbr2[j] = min(L.mbr[j],P[j]);
-				newmbr2[j+d] = max(L.mbr[j+d],P[j+d]);
-			}
-			int newarea1=1;
-			int newarea2=1;
-			for(int i=0; i<d; i++){
-				newarea1*=(newmbr1[i]-newmbr1[i+d]);
-				newarea2*=(newmbr2[i]-newmbr2[i+d]);
-			}
-			if(newarea1==newarea2){
-				if(area1==area2){
-					if(e1<e2){
-						L.mbr = newmbr1;
-						area1 = newarea1;
-						for(int k=0; k<2*d; ++k){
-							L.childMbr[e1][k] = P[k];
-						}
-						L.childId[e1] = newentryid;
-					}else{
-						LL.mbr = newmbr2;
-						area2 = newarea2;
-						for(int k=0; k<2*d; ++k){
-							LL.childMbr[e2][k] = P[k];
-						}
-						LL.childId[e2] = newentryid;
-					}
-				}else if(area1<area2){
-					L.mbr = newmbr1;
-					area1 = newarea1;
-					for(int k=0; k<2*d; ++k){
-						L.childMbr[e1][k] = P[k];
-					}
-					L.childId[e1] = newentryid;
-				}else{
-					LL.mbr = newmbr2;
-					area2 = newarea2;
-					for(int k=0; k<2*d; ++k){
-						LL.childMbr[e2][k] = P[k];
-					}
-					LL.childId[e2] = newentryid;
-				}
-			}else if(newarea1<newarea2){
-				L.mbr = newmbr1;
-				area1 = newarea1;
-				for(int k=0; k<2*d; ++k){
-					L.childMbr[e1][k] = P[k];
-				}
-				L.childId[e1] = newentryid;
-			}else{
-				LL.mbr = newmbr2;
-				area2 = newarea2;
-				for(int k=0; k<2*d; ++k){
-					LL.childMbr[e2][k] = P[k];
-				}
-				LL.childId[e2] = newentryid;
-			}
-		}
-	}
-	return LL;
 }
-// Rtree::Node PickNext(int P[d], int childMbr[][], bool leaf, Node L){
-// 	int area1=0;
-// 	int area2=0;
-// 	int e1 = 1;
-// 	int e2 = 1;
-// 	for(int i = 0; i < maxCap; ++i){
-// 		if(i!=s1 and i!=s2){
-// 			int newmbr1[2*d];
-// 			int newmbr2[2*d];	
-// 			for(int j=0; j<d; i++){
-// 				newmbr1[j] = min(L.mbr[j],childMbr[i][j+d],L.mbr[j+d]);
-// 				newmbr1[j+d] = max(L.mbr[j],childMbr[i][j+d],L.mbr[j+d]);
-// 				newmbr2[j] = min(L.mbr[j],childMbr[i][j+d],L.mbr[j+d]);
-// 				newmbr2[j+d] = max(L.mbr[j],childMbr[i][j+d],L.mbr[j+d]);
-// 			}
-// 			newarea1=1;
-// 			newarea2=1;
-// 			for(int i=0; i<d; j++){
-// 				newarea1*=(newmbr1[i]-newmbr1[i+d]);
-// 				newarea2*=(newmbr2[i]-newmbr2[i+d]);
-// 			}
-// 			if(newarea1==newarea2){
-// 				if(area1==area2){
-// 					if(e1<e2){
-// 						L.mbr = newmbr1;
-// 						area1 = newarea1;
-// 					}else{
-// 						LL.mbr = newmbr2;
-// 						area2 = newarea2;
-// 					}
-// 				}else if(area1<area2){
-// 					L.mbr = newmbr1;
-// 					area1 = newarea1;
-// 				}else{
-// 					LL.mbr = newmbr2;
-// 					area2 = newarea2;
-// 				}
-// 			}else if(newarea1<newarea2){
-// 				L.mbr = newmbr1;
-// 				area1 = newarea1;
-// 			}else{
-// 				LL.mbr = newmbr2;
-// 				area2 = newarea2;
-// 			}
-// 		}
-// 	}
-// 	int newmbr1[2*d];
-// 	int newmbr2[2*d];	
-// 	for(int j=0; j<d; i++){
-// 		newmbr1[j] = min(L.mbr[j],P[d],L.mbr[j+d]);
-// 		newmbr1[j+d] = max(L.mbr[j],P[d],L.mbr[j+d]);
-// 		newmbr2[j] = min(L.mbr[j],P[d],L.mbr[j+d]);
-// 		newmbr2[j+d] = max(L.mbr[j],P[d],L.mbr[j+d]);
-// 	}
-// 	newarea1=1;
-// 	newarea2=1;
-// 	for(int i=0; i<d; j++){
-// 		newarea1*=(newmbr1[i]-newmbr1[i+d]);
-// 		newarea2*=(newmbr2[i]-newmbr2[i+d]);
-// 	}
-// 	if(newarea1==newarea2){
-// 		if(area1==area2){
-// 			if(e1<e2){
-// 				L.mbr = newmbr1;
-// 				area1 = newarea1;
-// 			}else{
-// 				LL.mbr = newmbr2;
-// 				area2 = newarea2;
-// 			}
-// 		}else if(area1<area2){
-// 			L.mbr = newmbr1;
-// 			area1 = newarea1;
-// 		}else{
-// 			LL.mbr = newmbr2;
-// 			area2 = newarea2;
-// 		}
-// 	}else if(newarea1<newarea2){
-// 		L.mbr = newmbr1;
-// 		area1 = newarea1;
-// 	}else{
-// 		LL.mbr = newmbr2;
-// 		area2 = newarea2;
-// 	}
+class Node{
+public:
+	int id;
+	vector<int> mbr;
+	int parentId;
+	vector<int>childId;
+	vector<vector<int>> childMbr;
+	//No need of constructor
+	Node();
+	Node(int maxcap,int d);
+};
+Node::Node(){
+    id=-1;
+    parentId=-1;
+}
+
+Node::Node(int maxcap,int d){
+    id=-1;
+    parentId=-1;
+    mbr.resize(2*d,INT32_MIN);
+    for(int i=0;i<d;i++) mbr[i]=INT32_MAX;
+    childId.resize(maxcap,INT32_MIN);
+    childMbr.resize(maxcap);
+    for(int i=0;i<maxcap;i++){
+        childMbr[i].resize(2*d,INT32_MIN);
+        for(int j=0;j<d;j++) childMbr[i][j]=INT32_MAX;
+    }
+}
+void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize,int d,FileManager& fm, FileHandler& fh);
+int BulkLoad(FileManager& fm,FileHandler& fh,FileHandler& fh1,int d,int maxCap,int N,int& nodeIDCtr,int nodeSize){
+    
+    PageHandler rph;
+	cout << "Rtree File created " << endl;     
+    PageHandler ph=fh1.FirstPage();
+    //PageHandler ph2=fh1.LastPage();
+    int p0=ph.GetPageNum();
+    int p1=fh1.LastPage().GetPageNum();
+    fh1.UnpinPage(p1);
+
+    int entryPerPage=PAGE_SIZE/(sizeof(int)*d);
+    int numPage=N/entryPerPage;
+    if (N%entryPerPage!=0){
+        numPage++;
+    }
+
+    nodeIDCtr=0;
+    int offset=0;
+    cout<<"Num Pages "<<p1-p0+1<<" == "<<numPage<<" And N is"<<N<<endl;
+    rph=fh.NewPage();
+    char* rData;
+    char* data=ph.GetData();
+    int entryCtr=0;
+    while(p0<=p1){
+        int upperLimit=min(entryPerPage,N-entryCtr);        
+        for (int i=0;i<upperLimit;i++){
+            vector<int> v(d,-1);
+            for(int j=0;j<d;j++){
+
+                memcpy(&v[j],&data[4*i*d+4*j],sizeof(int));
+                cout<<"v["<<i<<"]"<<"["<<j<<"] = "<<v[j]<<" "<<4*i*d+4*j;                
+            }
+            cout<<"Out of Loop"<<entryCtr<<endl;
+            //entryCtr++;
+            cout<<"Hello";
+            cout<<PAGE_SIZE<<" "<<offset<<nodeSize;
+            //Flushing page
+            if ((PAGE_SIZE-offset)<nodeSize){
+                cout<<"flush page started"<<endl;
+                fh.MarkDirty(rph.GetPageNum() );
+                fh.UnpinPage(rph.GetPageNum());
+                offset=0;
+                if (entryCtr<N){
+                    rph=fh.NewPage();
+                }
+                else break;
+            }
+
+            //Making Node
+            Node n(maxCap,d);
+            n.id=nodeIDCtr;
+            nodeIDCtr++;            
+            for(int i=0;i<d;i++){
+                n.mbr[i]=v[i];
+                n.mbr[i+d]=v[i];
+            }
+
+            //Writing Node of RTree Page            
+            memcpy(&rData[offset],&n.id,sizeof(int));
+            offset+=4;
+            memcpy(&rData[offset],&n.parentId,sizeof(int));
+            offset+=4;
+            for (int i=0;i<n.mbr.size();i++){
+                memcpy(&rData[offset],&n.mbr[i],sizeof(int));
+                offset+=4;
+            }
+            for (int i=0;i<n.childId.size();i++){
+                memcpy(&rData[offset],&n.childId[i],sizeof(int));
+                offset+=4;
+            }
+            for (int i=0;i<n.childMbr.size();i++){
+                for(int j=0;j<2*d;j++){
+                    memcpy(&rData[offset],&n.mbr[i],sizeof(int));
+                    offset+=4;
+                }
+            }           
+        }
+        if (entryCtr<N){            
+            fh1.UnpinPage(p0);
+            p0++;
+            ph=fh1.PageAt(p0);
+            data=ph.GetData();                        
+        } else break;
+    }
+    cout<<N<<" NUM of Nodes and NodedIDCtr "<<nodeIDCtr<<endl;    
+    assignParent(0,nodeIDCtr,maxCap,nodeIDCtr,nodeSize,d,fm,fh);
+    fm.CloseFile(fh);
+    fm.CloseFile(fh1);    
+    return nodeIDCtr;
+}
+
+void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize,int d,FileManager& fm, FileHandler& fh){
+    int numNode=endidx-startIdx;
+    int numPNode=0;
+    int startPidx=endidx;
+    int block=numNode/maxCap;
+    int blockRem=numNode%maxCap;
+    int numNodeCreated=0;
+
+    int nodePerPage=PAGE_SIZE/nodeSize;
+    int pageNum=(endidx)/nodePerPage;    
+    int offset=((endidx)%nodePerPage)*nodeSize;
+    PageHandler rph;
+    if (offset=0){
+        rph=fh.NewPage();
+    }
+    else{
+        rph=fh.PageAt(pageNum);
+    }
+    char* rData=rph.GetData();
+    while(startIdx<endidx){
+        int remainderNode=min(maxCap,endidx-startIdx);
+        Node p(maxCap,d);
+        p.id=nodeIDCtr++;
+        p.parentId=-1;
+        for (int j=0;j<remainderNode;j++){         
+            
+            int childPageNum=startIdx/nodeSize;
+            int childOffset=startIdx%nodePerPage*nodeSize;
+            p.childId[j]=startIdx++;
+            PageHandler childPage=fh.PageAt(childPageNum);
+            char* cData=childPage.GetData();
+            memcpy(&cData[offset+4],&p.id,sizeof(int));
+            for (int k=0;k<2*d;k++){
+                int mbrCordinate=-1;
+                memcpy(&mbrCordinate,&cData[offset+8+4*k],sizeof(int));
+                p.childMbr[j][k]=mbrCordinate;
+                if (k<d){
+                    p.mbr[k]=min(p.mbr[k],mbrCordinate);
+                }
+                else{
+                    p.mbr[k]=max(p.mbr[k],mbrCordinate);
+                }
+            }
+            fh.MarkDirty(childPageNum);
+            fh.UnpinPage(childPageNum);
+            
+        }
+        numNodeCreated++;
+        //Flushing Parent Node
+        if ((PAGE_SIZE-offset)<nodeSize){            
+            fh.MarkDirty(pageNum);
+            fh.UnpinPage(pageNum);
+            offset=0;
+            pageNum++;
+            rph=fh.NewPage();
+            rData=rph.GetData();
+        }
+        //Writing Data to rData
+        memcpy(&rData[offset],&p.id,sizeof(int));
+        offset+=4;
+        memcpy(&rData[offset],&p.parentId,sizeof(int));
+        offset+=4;
+        for (int i=0;i<p.mbr.size();i++){
+            memcpy(&rData[offset],&p.mbr[i],sizeof(int));
+            offset+=4;
+        }
+        for (int i=0;i<p.childId.size();i++){
+            memcpy(&rData[offset],&p.childId[i],sizeof(int));
+            offset+=4;
+        }
+        for (int i=0;i<p.childMbr.size();i++){
+            for(int j=0;j<2*d;j++){
+                memcpy(&rData[offset],&p.mbr[i],sizeof(int));
+                offset+=4;
+            }
+        }
+    }
+    
+    if (numNode>maxCap){
+        assignParent(endidx,nodeIDCtr,maxCap,nodeIDCtr,nodeSize,d,fm,fh);
+    }
+}
+
+
+bool search(int xnode,int d,int maxCap,int nodeSize,vector<int>& point,FileHandler& fh){
+    int nodePerPage=PAGE_SIZE/nodeSize;
+    int pageNum=(xnode)/nodePerPage;
+    int offset=((xnode)%nodePerPage)*nodeSize;
+
+    int maxChildId=INT32_MIN;
+
+    PageHandler ph=fh.PageAt(pageNum);
+    char* Data=ph.GetData();  
+    Node P;
+    int additive=0;  
+    memcpy(&P.id,&Data[offset+additive],sizeof(int));
+    additive+=4;
+    memcpy(&P.parentId,&Data[offset+additive],sizeof(int));
+    additive+=4;
+    P.mbr.resize(2*d);
+    for (int i=0;i<2*d;i++){
+        memcpy(&P.mbr[i],&Data[offset+additive],sizeof(int));
+        additive+=4;
+    }
+    P.childId.resize(maxCap,INT32_MIN);
+    for(int i=0;i<maxCap;i++){
+        memcpy(&P.childId[i],&Data[offset+additive],sizeof(int));
+        additive+=4;
+        maxChildId=max(maxChildId,P.childId[i]);
+    }
+    P.childMbr.resize(maxCap);
+    for(int i=0;i<maxCap;i++){
+        for(int j=0;j<d;j++){
+            P.childMbr[i][j]=INT32_MAX;
+            P.childMbr[i][j+d]=INT32_MIN;
+        }
+    }
+    for(int i=0;i<maxCap;i++){
+        for(int j=0;j<2*d;j++){
+            memcpy(&P.childMbr[i][j],&Data[offset+additive],sizeof(int));
+            additive+=4;
+        }
+    }
+    fh.UnpinPage(pageNum);
+    if (maxChildId<0){
+        for (int i=0;i<d;i++){
+            if (point[i]!=P.mbr[i]){
+                return false;
+            }
+        }
+        return true;
+    }
+    else{
+        for(int i=0;i<d;i++){
+            if ((point[i]<P.mbr[i])||(point[i]>P.mbr[i+d])){
+                return false;
+            }            
+        }
+        bool res=false;
+        for(int i=0;i<maxCap;i++){
+            if(P.childId[i]>=0){
+                bool var=true;
+                for(int j=0;j<d;j++){
+                    if ((point[j]<P.childMbr[i][j])||(point[j]>P.childMbr[i][j+d])){
+                        var=false;
+                        break;
+                    }
+                }
+                if (var){
+                    res=res||search(P.childId[i],d,maxCap,nodeSize,point,fh);
+                    if (res==true){
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }   
+    
+}
+
+
+int main(int argc, char *argv[])
+{
+    const char* query=argv[1];
+    int maxCap=atoi(argv[2]);
+    int d=atoi(argv[3]);
+    char* output=argv[4];
+    cout<<argv[1]<<argv[2]<<argv[3]<<argv[4]<<endl;
+    //File Manager
+    FileManager fm;
+	fm.DestroyFile ("temp.txt");
+	fm.ClearBuffer();
+    FileHandler fh;
+    try
+    {
+        fh=fm.CreateFile("temp.txt");
+    }
+    catch(InvalidFileException e)
+    {
+        std::cerr <<"temp file creation failed" << '\n';
+    }
+    
+	//FileHandler fh = fm.CreateFile("temp.txt");	
+    FileHandler fh1;
+	ifstream infile(argv[1], ios::in);	
+	ofstream outfile(argv[4], ios::out);
+
+
+    int nodeIDctr=0;
+    int nodeSize=4*(2+2*d+maxCap+maxCap*2*d);
+    int rootNode;
+    vector<int> point(d);
+    cout<<"MAIN in/out file opened"<<endl;
+    while (true) {
+        char* type;
+        int x;
+        cout<<"Reading from query file";
+        infile >> type;
+        cout<<"Reading file name";
+        if (type[0]=='B'){
+            char* filename;
+            int N;            
+            infile>>filename>>N;
+            fh1=fm.OpenFile(filename);
+            if (N>0){
+                cout<<"Starting Bulkload"<<endl;
+                BulkLoad(fm,fh,fh1,d,maxCap,N,nodeIDctr,nodeSize);
+            }
+            rootNode=nodeIDctr;
+            outfile<<"BULKLOAD"<<'\n'<<'\n';
+        }
+        else if(type[0]=='I'){
+            //INSERT FUNCTION
+            for(int i=0;i<d;i++)infile>>point[i];
+            outfile<<"INSERT"<<'\n'<<'\n';
+
+        }
+        else{            
+            for(int i=0;i<d;i++)infile>>point[i];
+            bool res=search(rootNode,d,maxCap,nodeSize,point,fh);
+            if(res) outfile<<"TRUE"<<'\n'<<'\n';
+            else outfile<<"FALSE"<<'\n'<<'\n';
+            fm.CloseFile(fh);
+        }
+        break;
+        if( infile.eof() ) break;
+    
+    } 
+
+
+    return 0;
+}
+
+

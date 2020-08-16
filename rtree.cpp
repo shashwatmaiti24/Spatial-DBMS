@@ -79,6 +79,9 @@ void Node::print(){
     cout<<"ID "<<id<<" ParentId "<<parentId<<endl;;
     cout<<"MBR ";
     for (auto x: mbr) cout<<x<<" " ;
+    cout<<endl;
+    cout<<"CHILD ID ";
+    for (auto x: childId) cout<<x<<" " ;
     cout<<endl;    
 }
 void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize,int d,FileManager& fm, FileHandler& fh);
@@ -95,7 +98,7 @@ int BulkLoad(FileManager& fm,FileHandler& fh,FileHandler& fh1,int d,int maxCap,i
     if (N%entryPerPage!=0){
         numPage++;
     }
-    //ofstream outfile("points.txt", ios::out);
+    ofstream outfile("points_new.txt", ios::out);
 
     nodeIDCtr=0;
     int offset=0;
@@ -111,15 +114,15 @@ int BulkLoad(FileManager& fm,FileHandler& fh,FileHandler& fh1,int d,int maxCap,i
         //cout<<N<<entryPerPage;      
         for (int i=0;i<upperLimit;i++){
             vector<int> v(d,-1);
-            //outfile<<"SEARCH ";
+            outfile<<"SEARCH ";
             for(int j=0;j<d;j++){
 
                 std::memcpy(&v[j],&data[4*i*d+4*j],sizeof(int));
-                //outfile<<v[j]<<" ";
+                outfile<<v[j]<<" ";
                 //std::cout<<"v["<<i<<"]"<<"["<<j<<"] = "<<v[j]<<" "<<4*i*d+4*j;  
                             
             }
-            //outfile<<endl;
+            outfile<<endl;
             //std::cout<<" Out of Loop "<<entryCtr<<endl;
             entryCtr++;
             
@@ -210,7 +213,7 @@ void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize
     int nodePerPage=PAGE_CONTENT_SIZE/nodeSize;
     int pageNum=(endidx)/nodePerPage;    
     int offset=((endidx)%nodePerPage)*nodeSize;
-    std::cout<<"endidx "<<endidx<<" "<<startIdx << endl;
+    //std::cout<<"endidx "<<endidx<<" "<<startIdx << endl;
     PageHandler rph;
     if (offset==0){
         rph=fh.NewPage();
@@ -224,7 +227,7 @@ void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize
         p.id=nodeIDCtr++;
         p.parentId=-1;
         int upperLimit=min(maxCap,endidx-startIdx);
-        std::cout<<"UpperLimit "<<upperLimit<<endl;
+        //std::cout<<"UpperLimit "<<upperLimit<<endl;
         for(int i=0;i<upperLimit;i++){
             int cPage=startIdx/nodePerPage;
             int coffset=(startIdx%nodePerPage)*nodeSize;
@@ -238,10 +241,10 @@ void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize
             cNode.devtorify(nodeVector,nodeSize/sizeof(int));
 
             //cNode.print();
+            p.childId[i]=cNode.id;
             for(int j=0;j<2*d;j++){
                 if (j<d)p.mbr[j]=min(p.mbr[j],cNode.mbr[j]);
-                else p.mbr[j]=max(p.mbr[j],cNode.mbr[j]);
-                p.childId[j]=cNode.id;
+                else p.mbr[j]=max(p.mbr[j],cNode.mbr[j]);                
                 p.childMbr[i][j]=cNode.mbr[j];
             }
             startIdx++;
@@ -270,7 +273,7 @@ void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize
     fh.MarkDirty(rph.GetPageNum());
     fh.UnpinPage(rph.GetPageNum());
     //fh.FlushPage(rph.GetPageNum());
-    int tempPage=0;
+    /*int tempPage=0;
     int lp=fh.LastPage().GetPageNum();
     fh.UnpinPage(lp);
 
@@ -288,7 +291,7 @@ void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize
         fh.UnpinPage(tempPage);
         tempPage++;
         if (tempPage>lp) break;
-    }
+    }*/
     
     
     if (numNode>maxCap){
@@ -297,76 +300,60 @@ void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize
     }
 }
 
-
+bool isInside(vector<int>& rectangle,vector<int>& point,int d){
+    for (int i=0;i<d;i++){
+        if(!(rectangle[i]<=point[i] && rectangle[i+d]>=point[i])) return false;
+    }
+    return true;
+}
 bool search(int xnode,int d,int maxCap,int nodeSize,vector<int>& point,FileManager& fm,FileHandler& fh){
     int nodePerPage=PAGE_CONTENT_SIZE/nodeSize;
     int pageNum=(xnode)/nodePerPage;
     int offset=((xnode)%nodePerPage)*nodeSize;
 
     int maxChildId=INT32_MIN;
-
-    PageHandler ph=fh.PageAt(pageNum);
-    char* Data=ph.GetData();  
+    vector<int> xVector(nodeSize/sizeof(int));
+    PageHandler rph=fh.PageAt(pageNum);
+    char* rData=rph.GetData();
+    std::memcpy(&xVector[0],&rData[offset],nodeSize);
     Node P(maxCap,d);
-    int additive=0;  
-    std::memcpy(&P.id,&Data[offset],sizeof(int));
-    offset+=4;
-    std::memcpy(&P.parentId,&Data[offset],sizeof(int));
-    offset+=4;
-    
-    for (int i=0;i<2*d;i++){
-        std::memcpy(&P.mbr[i],&Data[offset],sizeof(int));
-        cout<<" P.mbr"<<P.mbr[i]<<endl;
-        offset+=4;
+    P.devtorify(xVector,nodeSize/sizeof(int));
+    P.print();
+    std::cout<<"STARTING POINT ";
+    for (auto x:point){
+        std::cout<<x<<" ";
     }
-    
-    for(int i=0;i<maxCap;i++){
-        std::memcpy(&P.childId[i],&Data[offset],sizeof(int));
-        offset+=4;
-        maxChildId=max(maxChildId,P.childId[i]);
+    std::cout<<"END POINT"<<endl;
+    for(int i=0;i<P.childId.size();i++){
+        if (maxChildId<P.childId[i]) maxChildId=P.childId[i];
     }    
-    for(int i=0;i<maxCap;i++){
-        for(int j=0;j<2*d;j++){
-            std::memcpy(&P.childMbr[i][j],&Data[offset],sizeof(int));
-            offset+=4;
-        }
-    }
-    fh.UnpinPage(pageNum);
-    cout<<"IN SEARCH RootID"<<xnode<<" childid "<<maxChildId<<endl;
     if (maxChildId<0){
+        std::cout<<"AT LEAF NODE"<<endl;
         for (int i=0;i<d;i++){
             if (point[i]!=P.mbr[i]){
                 return false;
             }
         }
+        //cout<<"Returning True";
         return true;
     }
     else{
-        for(int i=0;i<d;i++){
-            cout<<P.mbr[i]<<" "<<P.mbr[i+d]<<endl;
-            if ((point[i]<P.mbr[i])||(point[i]>P.mbr[i+d])){
-                return false;
-            }            
-        }
         bool res=false;
-        for(int i=0;i<maxCap;i++){
-            if(P.childId[i]>=0){
-                bool var=true;
-                for(int j=0;j<d;j++){
-                    if ((point[j]<P.childMbr[i][j])||(point[j]>P.childMbr[i][j+d])){
-                        var=false;
-                        break;
-                    }
+        cout<<"Looking Inside "<<endl;;
+        for (int i=0;i<maxCap;i++){
+            cout<<P.childId[i]<<endl;;
+            if (P.childId[i]>=0){
+                for (int j=0;j<2*d;j++){
+                    cout<<P.childMbr[i][j]<<" ";
                 }
-                if (var){
-                    res=res||search(P.childId[i],d,maxCap,nodeSize,point,fm,fh);
-                    if (res==true){
-                        return true;
-                    }
+                cout<<endl;
+                if (isInside(P.childMbr[i],point,d)){
+                    cout<<"THE POINT MAY BE ISIDE THIS CHILD "<<P.childId[i]<<endl;
+                    if(search(P.childId[i],d,maxCap,nodeSize,point,fm,fh)) return true;
                 }
             }
         }
-        return false;
+        return res;        
     }   
     
 }
@@ -429,7 +416,8 @@ int main(int argc, char** argv){
 	int count=0;
 	int count2=0;
 	while(fi>>word){
-		vector<int> pnt;
+		vector<int> pnt(d,0);
+        for(int i=0;i<d;i++)pnt[i]=d;
 		if(word.compare("INSERT")==0){
 			for(int k=0;k<d;k++){
 				fi>>word;
@@ -440,23 +428,21 @@ int main(int argc, char** argv){
 			fo<<"\n";
 			
 		}
-		else if(word.compare("SEARCH1")==0){
+		else if(word.compare("QUERY")==0){
 			for(int k=0;k<d;k++){
 				fi>>word;
-				// pnt[k]=stoi(word);
-                cout<<word<<" ";
-				pnt.push_back(stoi(word));
-			}
-            cout<<endl;
-            cout<<"rootId "<<arr[0]<<endl;
+				pnt[k]=stoi(word);
+                cout<<word<<" ";                
+				//pnt.push_back(stoi(word));
+			}  
+            cout<<endl;          
 			if(search(arr[0],d,maxCap,nodeSize,pnt,fm,fh) ){
 				fo<<"TRUE\n";
 				fo<<"\n";
 			}
 			else{
 				fo<<"FALSE\n";
-				fo<<"\n";
-                break;
+				fo<<"\n";                
 			}
 
 		}

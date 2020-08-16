@@ -173,7 +173,7 @@ int BulkLoad(FileManager& fm,FileHandler& fh,FileHandler& fh1,int d,int maxCap,i
                 std::memcpy(&rData[offset],&v1[0],nodeSize); 
                 int temp=-1;
                 std::memcpy(&temp,&rData[offset+8],sizeof(int));
-                std::cout<<"Created Node with id "<<n.id<<" "<<n.mbr[0]<<" "<<temp<<endl;               
+                //std::cout<<"Created Node with id "<<n.id<<" "<<n.mbr[0]<<" "<<temp<<endl;               
             }
             else{
                 std::cout<<"Problem in vectorify "<<v1.size()<<" "<<nodeSize<<endl;
@@ -210,6 +210,7 @@ void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize
     int nodePerPage=PAGE_CONTENT_SIZE/nodeSize;
     int pageNum=(endidx)/nodePerPage;    
     int offset=((endidx)%nodePerPage)*nodeSize;
+    std::cout<<"endidx "<<endidx<<" "<<startIdx << endl;
     PageHandler rph;
     if (offset==0){
         rph=fh.NewPage();
@@ -223,6 +224,7 @@ void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize
         p.id=nodeIDCtr++;
         p.parentId=-1;
         int upperLimit=min(maxCap,endidx-startIdx);
+        std::cout<<"UpperLimit "<<upperLimit<<endl;
         for(int i=0;i<upperLimit;i++){
             int cPage=startIdx/nodePerPage;
             int coffset=(startIdx%nodePerPage)*nodeSize;
@@ -235,7 +237,7 @@ void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize
             std::memcpy(&nodeVector[0],&cData[coffset],nodeSize);
             cNode.devtorify(nodeVector,nodeSize/sizeof(int));
 
-            cNode.print();
+            //cNode.print();
             for(int j=0;j<2*d;j++){
                 if (j<d)p.mbr[j]=min(p.mbr[j],cNode.mbr[j]);
                 else p.mbr[j]=max(p.mbr[j],cNode.mbr[j]);
@@ -245,19 +247,29 @@ void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize
             startIdx++;
             fh.MarkDirty(cPage);
             fh.UnpinPage(cPage);
-            fh.FlushPage(cPage);
+            
         }
         vector<int> parentVector=p.vectorify();
         std::memcpy(&rData[offset],&parentVector[0],nodeSize);
+        //cout<<"Created Node with "<<parentVector[0]<<" "<<p.id<<endl;
         offset+=nodeSize;
+        if (startIdx==endidx){
+            cout<<"ASSIGN  breaking loop"<<endl;
+            break;
+        }
         if ((PAGE_CONTENT_SIZE-offset)<nodeSize){
             fh.MarkDirty(rph.GetPageNum());
-            fh.UnpinPage(rph.GetPageNum());
+            fh.UnpinPage(rph.GetPageNum());                      
+            offset=0;
             rph=fh.NewPage();
             rData=rph.GetData();
         }
         
     }
+    cout<<"rph pagenum "<<rph.GetPageNum()<<endl;
+    fh.MarkDirty(rph.GetPageNum());
+    fh.UnpinPage(rph.GetPageNum());
+    //fh.FlushPage(rph.GetPageNum());
     int tempPage=0;
     int lp=fh.LastPage().GetPageNum();
     fh.UnpinPage(lp);
@@ -267,8 +279,11 @@ void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize
         rData=rph.GetData();
         for (int i=0;i<18;i++){
             int temp=0;
-            std::memcpy(&temp,&rData[i*nodeSize],sizeof(int));
-            cout<<tempPage<<" "<<temp<<endl;
+            vector<int> sample_v(nodeSize/sizeof(int));
+            std::memcpy(&sample_v[0],&rData[i*nodeSize],nodeSize);
+            Node kk(maxCap,d);
+            kk.devtorify(sample_v,nodeSize/sizeof(int));
+            kk.print();            
         }
         fh.UnpinPage(tempPage);
         tempPage++;
@@ -278,7 +293,7 @@ void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize
     
     if (numNode>maxCap){
         cout<<"Calling Assign Parent Again"<<numNode<<endl;
-        //assignParent(endidx,nodeIDCtr,maxCap,nodeIDCtr,nodeSize,d,fm,fh);
+        assignParent(endidx,nodeIDCtr,maxCap,nodeIDCtr,nodeSize,d,fm,fh);
     }
 }
 
@@ -398,6 +413,14 @@ int main(int argc, char** argv){
     int nodeIDCtr=0;
 	int rootId=BulkLoad(fm, fh, fh1, d,maxCap,N,nodeIDCtr,nodeSize);
 	
+    int nodesPerPage=PAGE_CONTENT_SIZE/nodeSize;
+    int rootpage=rootId/nodesPerPage;
+    int offs=(rootId%nodesPerPage)*nodeSize;
+    int temp=-2;
+    char* t1=fh.PageAt(rootpage).GetData();
+    std::memcpy(&temp,&t1[offs],sizeof(int));
+    
+    cout<<"ROOT DETAIL "<<temp<<endl;
 	int arr[2];
 	arr[0]=rootId;
 	// arr[1]=rootId+1;
@@ -417,7 +440,7 @@ int main(int argc, char** argv){
 			fo<<"\n";
 			
 		}
-		else if(word.compare("SEARCH")==0){
+		else if(word.compare("SEARCH1")==0){
 			for(int k=0;k<d;k++){
 				fi>>word;
 				// pnt[k]=stoi(word);

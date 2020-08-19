@@ -10,7 +10,7 @@ public:
 
 	RTree(int _d, int _maxCap);
     void insert(std::vector<int> P); //Vector of D dimension provided
-    void inserrt(int xNode,std::vector<int> P, const char* filename);//Helper Function for insert
+    void inserrt(int xNode,int d,int maxCap,FileHandler& fh,int nodeSize,std::vector<int> P,int& nodeIDCtr);//Helper Function for insert
     void bulkLoad(char* filename); 
     Node ChooseLeaf(Node RN,std::vector<int>P);
     Node SplitNode(std::vector<int> P, int newentryid, Node L);

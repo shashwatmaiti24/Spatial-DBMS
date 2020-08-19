@@ -85,10 +85,10 @@ void Node::print(){
     for (auto x: childId) cout<<x<<" " ;
     cout<<endl;
     cout<<"CHILD MBR ";
-    for (auto x: childMbr){ 
-		for (auto y: x) cout<<y<<" " ;
-    	cout<<endl;
-	}    
+    // for (auto x: childMbr){ 
+	// 	for (auto y: x) cout<<y<<" " ;
+    // 	cout<<endl;
+	// }    
 }
 void assignParent(int startIdx,int endidx,int maxCap,int& nodeIDCtr,int nodeSize,int d,FileManager& fm, FileHandler& fh);
 int BulkLoad(FileManager& fm,FileHandler& fh,FileHandler& fh1,int d,int maxCap,int N,int& nodeIDCtr,int nodeSize){
@@ -324,11 +324,12 @@ bool search(int xnode,int d,int maxCap,int nodeSize,vector<int>& point,FileManag
     std::memcpy(&xVector[0],&rData[offset],nodeSize);
     Node P(maxCap,d);
     P.devtorify(xVector,nodeSize/sizeof(int));
+	fh.UnpinPage(rph.GetPageNum());
     // P.print();
     // std::cout<<"STARTING POINT ";
-    for (auto x:point){
-        std::cout<<x<<" ";
-    }
+    // for (auto x:point){
+    //     std::cout<<x<<" ";
+    // }
     // std::cout<<"END POINT"<<endl;
     // for(int i=0;i<P.childId.size();i++){
     //     if (maxChildId<P.childId[i]) maxChildId=P.childId[i];
@@ -341,6 +342,7 @@ bool search(int xnode,int d,int maxCap,int nodeSize,vector<int>& point,FileManag
             }
         }
         //cout<<"Returning True";
+		// fh.UnpinPage(rph.GetPageNum());
         return true;
     }
     else{
@@ -355,32 +357,34 @@ bool search(int xnode,int d,int maxCap,int nodeSize,vector<int>& point,FileManag
                 // cout<<endl;
                 if (isInside(P.childMbr[i],point,d)){
                     // cout<<"THE POINT MAY BE INSIDE THIS CHILD "<<P.childId[i]<<endl;
-                    if(search(P.childId[i],d,maxCap,nodeSize,point,fm,fh)) return true;
+                    if(search(P.childId[i],d,maxCap,nodeSize,point,fm,fh)){
+						// fh.UnpinPage(rph.GetPageNum());
+						return true;
+					}
                 }
             }
         }
+		// fh.UnpinPage(rph.GetPageNum());
         return res;        
     }   
     
 }
-Node GetNode(int id,FileHandler& fh, int nodeSize, int maxCap, int d);
-void CreateNode(Node node,FileHandler& fh, int nodeSize, int maxCap, int d);
-int insert(int xNode,int d,int maxCap,FileHandler& fh,int nodeSize,std::vector<int> P,int& nodeIDCtr);
-Node ChooseLeaf(Node N, std::vector<int>P, int nodeSize, FileHandler& fh,int maxCap,int d);
-Node SplitNode(Node Pnode, Node L, FileHandler& fh, int nodeSize, int& nodeIDCtr, int maxCap, int d);
-int AdjustTree(Node L, Node LL, FileHandler& fh, int nodeSize, int& nodeIDCtr, bool split, int maxCap, int d);
-Node GetNode(int id,FileHandler& fh, int nodeSize, int maxCap, int d){
+Node GetNode(int id,FileHandler& fh, int nodeSize, int maxCap, int d, FileManager& fm);
+void CreateNode(Node node,FileHandler& fh, int nodeSize, int maxCap, int d, FileManager& fm);
+int insert(int xNode,int d,int maxCap,FileHandler& fh,int nodeSize,std::vector<int> P,int& nodeIDCtr, FileManager& fm);
+Node ChooseLeaf(Node N, std::vector<int>P, int nodeSize, FileHandler& fh,int maxCap,int d, FileManager& fm);
+Node SplitNode(Node Pnode, Node L, FileHandler& fh, int nodeSize, int& nodeIDCtr, int maxCap, int d, FileManager& fm);
+int AdjustTree(Node L, Node LL, FileHandler& fh, int nodeSize, int& nodeIDCtr, bool split, int maxCap, int d, FileManager& fm);
+Node GetNode(int id,FileHandler& fh, int nodeSize, int maxCap, int d, FileManager& fm){
+	if(id==1557){
+		cout<<"Getting 1557"<<endl;
+	}
 	int nodePerPage=PAGE_CONTENT_SIZE/nodeSize;
 	Node N(maxCap, d);
 	int NPnum=id/nodePerPage;
 	PageHandler NPage=fh.PageAt(NPnum);
     char* NData=NPage.GetData();
 	int NOffset=(id%nodePerPage)*nodeSize;
-	if ((PAGE_CONTENT_SIZE-NOffset)<nodeSize){      
-        // cout<<"newpage is created "<<node.id<<endl;             
-		NOffset=0;
-		NPnum+=1;
-	}
 	NPage=fh.PageAt(NPnum);
     vector<int> xVector(nodeSize/sizeof(int));
     std::memcpy(&xVector[0],&NData[NOffset],nodeSize);
@@ -389,7 +393,7 @@ Node GetNode(int id,FileHandler& fh, int nodeSize, int maxCap, int d){
 	// memcpy(&Nid,&NData[NOffset],sizeof(int)); 
 	// N.id = Nid;
 	// int NparentId;
-	// memcpy(&NparentId,&NData[NOffset],sizeof(int)); 
+	// memcpy(&NparentId,&NData[NOffset+4],sizeof(int)); 
 	// N.parentId = NparentId;
 	// N.mbr.resize(2*d);
 	// for (int i=0;i<2*d;i++){
@@ -409,30 +413,45 @@ Node GetNode(int id,FileHandler& fh, int nodeSize, int maxCap, int d){
 	// 		N.childMbr[j][i]=mbrCordinate;
 	// 	}
 	// }
-	fh.UnpinPage(NPnum);
+	fh.UnpinPage(NPage.GetPageNum());
 	return N;
 }
-void CreateNode(Node node,FileHandler& fh, int nodeSize, int maxCap, int d){
+void CreateNode(Node node,FileHandler& fh, int nodeSize, int maxCap, int d, FileManager& fm){
 	int nodePerPage=PAGE_CONTENT_SIZE/nodeSize;
 	int NOffset=(node.id%nodePerPage)*nodeSize;
 	int NPnum=node.id/nodePerPage;
+		if(node.id==1557){
+		cout<<"Node 1557"<<endl;
+		cout<<nodePerPage<<endl;
+		cout<<NOffset<<endl;
+		cout<<NPnum<<endl;
+	}
 	PageHandler NPage;
+
     // cout<<NPnum<<" node created "<<node.id<<endl;
-    // cout<<nodePerPage<<" "<<endl;        
+    cout<<" creating node"<<endl;        
 
     // cout<<PAGE_CONTENT_SIZE<<" "<<NOffset<<" "<<nodeSize<<endl;
-	if ((PAGE_CONTENT_SIZE-NOffset)<nodeSize or fh.LastPage().GetPageNum()<NPnum){      
-        // cout<<"newpage is created "<<node.id<<endl;             
+	if (NPnum>fh.LastPage().GetPageNum()){      
+        cout<<"newpage is created "<<node.id<<endl;  
+		// fh.UnpinPage(NPage.GetPageNum());           
 		NOffset=0;
 		NPage=fh.NewPage();
 		NPnum = NPage.GetPageNum();
 	}
 	else{
-		NPage=fh.PageAt(NPnum);
+		NPage = fh.PageAt(NPnum);
 	}
     vector<int> v1=node.vectorify();
     char* NData=NPage.GetData();
-    std::memcpy(&NData[NOffset],&v1[0],nodeSize); 
+    std::memcpy(&NData[NOffset],&v1[0],nodeSize);
+    // fh.FlushPage(NPage.GetPageNum());
+	fh.MarkDirty(NPage.GetPageNum());
+	fh.UnpinPage(NPage.GetPageNum()); 
+    // fh.FlushPage(NPage.GetPageNum());
+	// Node blah = GetNode(node.id, fh, nodeSize, maxCap, d, fm);
+	// blah.print();
+		// }
 	// int Nid = node.id;
 	// memcpy(&NData[NOffset],&Nid,sizeof(int)); 
 	// int NparentId = node.parentId;
@@ -452,28 +471,65 @@ void CreateNode(Node node,FileHandler& fh, int nodeSize, int maxCap, int d){
 	// 		memcpy(&NData[NOffset+8+8*d+4*maxCap+8*d*j+4*i],&mbrCordinate,sizeof(int));
 	// 	}
 	// }
-	fh.MarkDirty(NPnum);
-	fh.UnpinPage(NPnum);
+// 	fh.MarkDirty(NPage.GetPageNum());
+// 	fh.UnpinPage(NPage.GetPageNum());
 }
 
 
-int insert(int xNode,int d,int maxCap,FileHandler& fh,int nodeSize,std::vector<int> P,int& nodeIDCtr){
+int insert(int xNode,int d,int maxCap,FileHandler& fh,int nodeSize,std::vector<int> P,int& nodeIDCtr,FileManager& fm){
+	int tempPage=0;
+    int lp=fh.LastPage().GetPageNum();
+    fh.UnpinPage(lp);
 
+	
+	cout<<"********************************************************"<<endl;
+	PageHandler rph;
+	char* rData;
+    while(true){
+        rph=fh.PageAt(tempPage);
+        rData=rph.GetData();
+        for (int i=0;i<PAGE_CONTENT_SIZE/nodeSize;i++){
+            int temp=0;
+            vector<int> sample_v(nodeSize/sizeof(int));
+            std::memcpy(&sample_v[0],&rData[i*nodeSize],nodeSize);
+            Node kk(maxCap,d);
+            kk.devtorify(sample_v,nodeSize/sizeof(int));
+            kk.print();            
+        }
+        fh.UnpinPage(tempPage);
+        tempPage++;
+        if (tempPage>lp) break;
+    }
+	
+	cout<<"^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^"<<endl;
+	
+	
+	cout<<"******************INSERTING***********************"<<endl;
 
-    // for (auto x: P) cout<<x<<" " ;
+    for (auto x: P) cout<<x<<" " ;
     // cout<<endl;
     // cout<<"This is the root ID "<<xNode<<endl;
-	Node RN = GetNode(xNode, fh, nodeSize, maxCap, d);
+	if(nodeIDCtr>1557){
+		GetNode(1557, fh, nodeSize, maxCap, d, fm).print();
+	}
+	cout << "1_________________" << endl;
+	cout<< xNode <<endl;
+	Node RN = GetNode(xNode, fh, nodeSize, maxCap, d, fm);
     // RN.print();
     // cout<<"RN print done"<<endl;
-    Node L = ChooseLeaf(RN, P, nodeSize,fh, maxCap, d);
+	cout << "2_________________" << endl;
+    Node L = ChooseLeaf(RN, P, nodeSize,fh, maxCap, d, fm);
+	cout << "3_________________" << endl;
 	Node Pnode(maxCap,d);
-	Pnode.id=nodeIDCtr++;
+	Pnode.id=nodeIDCtr;
+	nodeIDCtr++;
 	P.resize(d);     
 	for(int i=0;i<d;i++){
 		Pnode.mbr[i] = P[i];
  		Pnode.mbr[i+d]=P[i];
 	}
+	cout << "4_________________" << endl;
+	Pnode.print();
 	// put new data in the leaf node
 	int nchild=maxCap;
 	for(int i=0; i<maxCap; ++i){
@@ -483,6 +539,7 @@ int insert(int xNode,int d,int maxCap,FileHandler& fh,int nodeSize,std::vector<i
 			break;
 		}
 	}
+	cout << "5_________________" << endl;
 
 	// cout<<"______________Pnode________________"<<endl;
 	// Pnode.print();
@@ -511,18 +568,25 @@ int insert(int xNode,int d,int maxCap,FileHandler& fh,int nodeSize,std::vector<i
 		}
 		L.childId[nchild] = Pnode.id;
 		Pnode.parentId = L.id;
-        CreateNode(Pnode, fh, nodeSize, maxCap, d);
-        CreateNode(L, fh, nodeSize, maxCap, d);
+	cout << "6_________________" << endl;
+        CreateNode(Pnode, fh, nodeSize, maxCap, d, fm);
+	cout << "7_________________" << endl;
+        CreateNode(L, fh, nodeSize, maxCap, d, fm);
+	cout << "8_________________" << endl;
         
 	//	nchild+=1;
-		return AdjustTree(L, L, fh, nodeSize, nodeIDCtr, false, maxCap, d);
+		return AdjustTree(L, L, fh, nodeSize, nodeIDCtr, false, maxCap, d, fm);
 	}
 	// put new data in the leaf node
+	cout << "9_________________" << endl;
     // cout<<"1________________________ "<<Pnode.id<<endl;
-	Node NN = SplitNode(Pnode, L, fh, nodeSize, nodeIDCtr, maxCap, d);
+	Node NN = SplitNode(Pnode, L, fh, nodeSize, nodeIDCtr, maxCap, d, fm);
+	cout << "10_________________" << endl;
+	L.print();
+	NN.print();
     // NN.print();
     // cout<<"2________________________ "<<Pnode.id<<endl;
-	return AdjustTree(L, NN, fh, nodeSize, nodeIDCtr, true, maxCap, d);
+	return AdjustTree(L, NN, fh, nodeSize, nodeIDCtr, true, maxCap, d, fm);
 	// while(Leaf.parentId!=RN.id){
 	// 	Node parent;
 	// 	memcpy (parent, data[0], sizeof(Node));
@@ -537,10 +601,12 @@ int insert(int xNode,int d,int maxCap,FileHandler& fh,int nodeSize,std::vector<i
 	// }
 //      Code from step 10
 }
-Node ChooseLeaf(Node N, std::vector<int>P, int nodeSize, FileHandler& fh,int maxCap,int d){
-        // N.print();
-        // cout<<"printed N"<<endl;
-	Node leaf = GetNode(N.childId[0], fh, nodeSize, maxCap, d);
+Node ChooseLeaf(Node N, std::vector<int>P, int nodeSize, FileHandler& fh,int maxCap,int d, FileManager& fm){
+        N.print();
+        cout<<"printed N"<<endl;
+		cout<<N.childId[0]<<endl;
+	Node leaf = GetNode(N.childId[0], fh, nodeSize, maxCap, d, fm);
+	leaf.print();
 	if(leaf.childId[0]<0){
         // cout<<"------------------Returned----------------"<<endl;
 		return N;
@@ -553,15 +619,15 @@ Node ChooseLeaf(Node N, std::vector<int>P, int nodeSize, FileHandler& fh,int max
 	double minarea;
 	double area=1;
 	int newmbr[2*d];	
-	P.resize(d);
+	// P.resize(d);
 	for(int i=0; i<d; i++){
 		area*=(N.childMbr[0][i+d]-N.childMbr[0][i]);
 		newmbr[i] = min(N.childMbr[0][i],P[i]);
-		newmbr[i+d] = max(N.childMbr[0][i],P[i]);
+		newmbr[i+d] = max(N.childMbr[0][i+d],P[i]);
 	}
 	double newarea=1;
 	for(int i=0; i<d; i++){
-		newarea*=(newmbr[i]-newmbr[i+d]);
+		newarea*=(newmbr[i+d]-newmbr[i]);
 	}
 	minarea=area;
 	int mindiff = 0;
@@ -573,11 +639,11 @@ Node ChooseLeaf(Node N, std::vector<int>P, int nodeSize, FileHandler& fh,int max
 		for(int j=0; j<d; j++){
 			area*=(N.childMbr[i][j]-N.childMbr[i][j+d]);
 			newmbr[j] = min(N.childMbr[i][j],P[j]);
-			newmbr[j+d] = max(N.childMbr[i][j],P[j]);
+			newmbr[j+d] = max(N.childMbr[i][j+d],P[j]);
 		}
 		newarea=1;
 		for(int j=0; j<d; j++){
-			newarea*=(newmbr[j]-newmbr[j+d]);
+			newarea*=(newmbr[j+d]-newmbr[j]);
 		}
 		if(mindiffarea>newarea-area){
 			mindiffarea=newarea-area;
@@ -591,23 +657,28 @@ Node ChooseLeaf(Node N, std::vector<int>P, int nodeSize, FileHandler& fh,int max
 		}
 		i++;
 	}
-    // cout<<"What's happening "<<N.childId[mindiff]<<endl;
+    cout<<"What's happening "<<N.childId[mindiff]<<endl;
 	// Get the node corresponding to mindiff from page to N
-	Node newN = GetNode(N.childId[mindiff], fh, nodeSize, maxCap, d);
+	Node newN = GetNode(N.childId[mindiff], fh, nodeSize, maxCap, d, fm);
 
         // newN.print();
         // cout<<"printed new N"<<endl;
-	return ChooseLeaf(newN, P, nodeSize, fh, maxCap, d);
+	return ChooseLeaf(newN, P, nodeSize, fh, maxCap, d, fm);
 }
-Node SplitNode(Node Pnode, Node L, FileHandler& fh, int nodeSize, int& nodeIDCtr, int maxCap, int d){
+Node SplitNode(Node Pnode, Node L, FileHandler& fh, int nodeSize, int& nodeIDCtr, int maxCap, int d, FileManager& fm){
 
+	cout<<"Inside Split"<<endl;
+	if(nodeIDCtr>1557){
+		GetNode(1557, fh, nodeSize, maxCap, d, fm).print();
+	}
 	Node LL(maxCap, d);
-	LL.id = nodeIDCtr++;
+	LL.id = nodeIDCtr;
+	nodeIDCtr++;
 	Node newL(maxCap, d);
 	newL.id = L.id;
 	newL.parentId = L.parentId;
 	bool isleaf;
-	Node leaf = GetNode(L.childId[0], fh, nodeSize, maxCap, d);
+	Node leaf = GetNode(L.childId[0], fh, nodeSize, maxCap, d, fm);
 	if(leaf.childId[0]<0){
 		isleaf = true;
 	}
@@ -700,9 +771,9 @@ Node SplitNode(Node Pnode, Node L, FileHandler& fh, int nodeSize, int& nodeIDCtr
 	}
 	if(s2!=-1){
 		LL.childId[0] = L.childId[s2];
-        Node LLchild = GetNode(L.childId[s2], fh, nodeSize, maxCap, d);
+        Node LLchild = GetNode(L.childId[s2], fh, nodeSize, maxCap, d, fm);
         LLchild.parentId = LL.id;
-        CreateNode(LLchild, fh, nodeSize, maxCap, d);
+        CreateNode(LLchild, fh, nodeSize, maxCap, d, fm);
 		for(int k = 0; k<2*d; ++k){
 			LL.childMbr[0][k] = L.childMbr[s2][k];
 			LL.mbr[k] = L.childMbr[s2][k];
@@ -754,13 +825,13 @@ Node SplitNode(Node Pnode, Node L, FileHandler& fh, int nodeSize, int& nodeIDCtr
 			e2++;
 		}
 	}
-    CreateNode(Pnode, fh, nodeSize, maxCap, d);
+    CreateNode(Pnode, fh, nodeSize, maxCap, d, fm);
 	int cur;
 	int filled;
 	double areaL=1;
 	double areaLL=1;
 	for(int i = 0; i < maxCap; ++i){
-		Node Enode = GetNode(L.childId[i], fh, nodeSize, maxCap, d);
+		Node Enode = GetNode(L.childId[i], fh, nodeSize, maxCap, d, fm);
 		if(i!=s1 and i!=s2){
 			vector<int> newmbrL;
 			vector<int> newmbrLL;	
@@ -821,7 +892,7 @@ Node SplitNode(Node Pnode, Node L, FileHandler& fh, int nodeSize, int& nodeIDCtr
 				e2++;
 			}
 		}
-		CreateNode(Enode, fh, nodeSize, maxCap, d);
+		CreateNode(Enode, fh, nodeSize, maxCap, d, fm);
 		if(e1 == ceil(maxCap/2)){
 			cur = i+1;
 			filled = 0;
@@ -840,7 +911,7 @@ Node SplitNode(Node Pnode, Node L, FileHandler& fh, int nodeSize, int& nodeIDCtr
 	if(filled == 0){
 		for(int i = cur; i < maxCap; ++i){
 		    if(i!=s1 and i!=s2){
-                Node Enode = GetNode(L.childId[i], fh, nodeSize, maxCap, d);
+                Node Enode = GetNode(L.childId[i], fh, nodeSize, maxCap, d, fm);
                 for(int j=0; j<d; j++){
                     LL.mbr[j] = min(LL.mbr[j],L.childMbr[i][j]);
                     LL.mbr[j+d] = max(LL.mbr[j+d],L.childMbr[i][j+d]);
@@ -860,17 +931,17 @@ Node SplitNode(Node Pnode, Node L, FileHandler& fh, int nodeSize, int& nodeIDCtr
                 // }
                 LL.childId[e2] = Enode.id;
                 Enode.parentId = LL.id;
-                CreateNode(Enode, fh, nodeSize, maxCap, d);
+                CreateNode(Enode, fh, nodeSize, maxCap, d, fm);
                 e2++;
 
-                cout<<"Ye wala ho rha"<<endl;
+                // cout<<"Ye wala ho rha"<<endl;
             }
 		}
 	}
 	else if(filled == 1){
 		for(int i = cur; i < maxCap; ++i){
 		    if(i!=s1 and i!=s2){
-                Node Enode = GetNode(L.childId[i], fh, nodeSize, maxCap, d);
+                Node Enode = GetNode(L.childId[i], fh, nodeSize, maxCap, d, fm);
                 for(int j=0; j<d; j++){
                     newL.mbr[j] = min(newL.mbr[j],L.childMbr[i][j]);
                     newL.mbr[j+d] = max(newL.mbr[j+d],L.childMbr[i][j+d]);
@@ -890,15 +961,15 @@ Node SplitNode(Node Pnode, Node L, FileHandler& fh, int nodeSize, int& nodeIDCtr
                 // }
                 newL.childId[e1] = Enode.id;
                 Enode.parentId = newL.id;
-                CreateNode(Enode, fh, nodeSize, maxCap, d);
+                CreateNode(Enode, fh, nodeSize, maxCap, d, fm);
                 e1++;
                 // cout<<"Nahi Ye wala ho rha"<<endl;
             }
 		}
 	}
  //   LL.print();
-	CreateNode(newL, fh, nodeSize, maxCap, d);
-	CreateNode(LL, fh, nodeSize, maxCap, d);
+	CreateNode(newL, fh, nodeSize, maxCap, d, fm);
+	CreateNode(LL, fh, nodeSize, maxCap, d, fm);
     // cout<<endl;
     // cout<<"Split Here"<<Pnode.id<<endl;
     // cout<<endl;
@@ -907,28 +978,33 @@ Node SplitNode(Node Pnode, Node L, FileHandler& fh, int nodeSize, int& nodeIDCtr
 	return LL;
 }
 
-int AdjustTree(Node L, Node LL, FileHandler& fh, int nodeSize, int& nodeIDCtr, bool split, int maxCap, int d){
+int AdjustTree(Node L, Node LL, FileHandler& fh, int nodeSize, int& nodeIDCtr, bool split, int maxCap, int d, FileManager& fm){
     // L.print();
     // cout<<"_________"<<endl;
     // LL.print();
     // cout<<"_"<<endl;
-    // cout<<"AT1__________"<<endl;
+	cout<<"Inside AT"<<endl;
+	if(nodeIDCtr>1557){
+		GetNode(1557, fh, nodeSize, maxCap, d, fm).print();
+	}
+    cout<<"AT1__________"<<endl;
 	if(!split){
 		if(L.parentId<0){
-            // cout<<"AT2__________"<<endl;
+            cout<<"AT2__________"<<endl;
 			return L.id;
 		}
-        // cout<<"AT3__________"<<endl;
-		Node LParent = GetNode(L.parentId, fh, nodeSize, maxCap, d);
+		else{
+        cout<<"AT3__________"<<endl;
+		Node LParent = GetNode(L.parentId, fh, nodeSize, maxCap, d, fm);
 		int posL;
 		for(int i=0; i<maxCap; ++i){
 			if(LParent.childId[i]== L.id){
-                // cout<<"AT4__________"<<endl;
+                cout<<"AT4__________"<<endl;
 				posL = i;
 				break;
 			}
 		}
-        // cout<<"AT5__________"<<endl;
+        cout<<"AT5__________"<<endl;
         // LParent.print();
         // L.print();
 		for(int i=0; i<d; i++){
@@ -937,75 +1013,91 @@ int AdjustTree(Node L, Node LL, FileHandler& fh, int nodeSize, int& nodeIDCtr, b
 			LParent.mbr[i] = min(LParent.mbr[i], L.mbr[i]);
 			LParent.mbr[i+d] = max(LParent.mbr[i+d], L.mbr[i+d]);
 		}
-        // cout<<"AT6__________"<<endl;
-		CreateNode(LParent, fh, nodeSize, maxCap, d);
-        // cout<<"AT7__________"<<endl;
-		return AdjustTree(LParent, LParent, fh, nodeSize, nodeIDCtr, false, maxCap, d);
-	}
-	if(L.parentId<0){
-		Node newRN(maxCap, d);
-		newRN.id = nodeIDCtr++;
-		L.parentId = newRN.id;
-		LL.parentId = newRN.id;
-		newRN.childId[0] = L.id;
-		newRN.childId[1] = LL.id;
-        // cout<<"AT11_______________"<<endl;
-        newRN.id;
-        // L.print();
-        // LL.print();
-		for(int i=0; i<d; i++){
-			newRN.childMbr[0][i] = L.mbr[i];
-			newRN.childMbr[0][i+d] = L.mbr[i+d];
-			newRN.childMbr[1][i] = LL.mbr[i];
-			newRN.childMbr[1][i+d] = LL.mbr[i+d];
-			newRN.mbr[i] = min(LL.mbr[i], L.mbr[i]);
-			newRN.mbr[i+d] = max(LL.mbr[i+d], L.mbr[i+d]);
-		}
-		CreateNode(newRN, fh, nodeSize, maxCap, d);
-		CreateNode(L, fh, nodeSize, maxCap, d);
-		CreateNode(LL, fh, nodeSize, maxCap, d);
-		return newRN.id;
-	}
-    // cout<<"AT8__________"<<endl;
-	Node LParent = GetNode(L.parentId, fh, nodeSize, maxCap, d);
-	int nchild=maxCap;
-    int posL;
-	for(int i=0; i<maxCap; ++i){
-        if(LParent.childId[i]== L.id){
-                // cout<<"AT4__________"<<endl;
-            posL = i;
-        }
-		if(LParent.childId[i]<0){
-			nchild = i;
-			break;
+        cout<<"AT6__________"<<endl;
+		CreateNode(LParent, fh, nodeSize, maxCap, d, fm);
+		LParent.print();
+        cout<<"AT7__________"<<endl;
+		return AdjustTree(LParent, LParent, fh, nodeSize, nodeIDCtr, false, maxCap, d, fm);
 		}
 	}
-    // cout<<"AT9__________"<<endl;
-	if(maxCap>nchild){
-		LL.parentId = LParent.id;
-        LParent.childId[nchild] = LL.id;
-        for(int i=0; i<d; i++){
-			LParent.childMbr[posL][i] = L.mbr[i];
-			LParent.childMbr[posL][i+d] = L.mbr[i+d];
-			LParent.childMbr[nchild][i] = LL.mbr[i];
-			LParent.childMbr[nchild][i+d] = LL.mbr[i+d];
-			LParent.mbr[i] = min(min(LL.mbr[i], L.mbr[i]), LParent.mbr[i]);
-			LParent.mbr[i+d] = max(max(LL.mbr[i+d], L.mbr[i+d]), LParent.mbr[i+d]);
-        }
-		CreateNode(LParent, fh, nodeSize, maxCap, d);
-		CreateNode(LL, fh, nodeSize, maxCap, d);
-		return AdjustTree(LParent, LParent, fh, nodeSize, nodeIDCtr, false, maxCap, d);
+	else{
+		if(L.parentId<0){
+			Node newRN(maxCap, d);
+			newRN.id = nodeIDCtr;
+			nodeIDCtr++;
+			L.parentId = newRN.id;
+			LL.parentId = newRN.id;
+			newRN.childId[0] = L.id;
+			newRN.childId[1] = LL.id;
+			cout<<"AT8_______________"<<endl;
+			newRN.id;
+			// L.print();
+			// LL.print();
+			for(int i=0; i<d; i++){
+				newRN.childMbr[0][i] = L.mbr[i];
+				newRN.childMbr[0][i+d] = L.mbr[i+d];
+				newRN.childMbr[1][i] = LL.mbr[i];
+				newRN.childMbr[1][i+d] = LL.mbr[i+d];
+				newRN.mbr[i] = min(LL.mbr[i], L.mbr[i]);
+				newRN.mbr[i+d] = max(LL.mbr[i+d], L.mbr[i+d]);
+			}
+
+			cout<<"AT9_______________"<<endl;
+			CreateNode(newRN, fh, nodeSize, maxCap, d, fm);
+			CreateNode(L, fh, nodeSize, maxCap, d, fm);
+			CreateNode(LL, fh, nodeSize, maxCap, d, fm);
+			cout<<"AT10_______________"<<endl;
+			return newRN.id;
+		}
+		else{
+			cout<<"AT11__________"<<endl;
+			Node LParent = GetNode(L.parentId, fh, nodeSize, maxCap, d, fm);
+			int nchild=maxCap;
+			int posL;
+			for(int i=0; i<maxCap; ++i){
+				if(LParent.childId[i]== L.id){
+						cout<<"AT12__________"<<endl;
+					posL = i;
+				}
+				if(LParent.childId[i]<0){
+					nchild = i;
+					break;
+				}
+			}
+			L.print();
+			LL.print();
+			LParent.print();
+			cout<<"AT13__________"<<endl;
+			if(maxCap>nchild){
+				LL.parentId = LParent.id;
+				LParent.childId[nchild] = LL.id;
+				for(int i=0; i<d; i++){
+					LParent.childMbr[posL][i] = L.mbr[i];
+					LParent.childMbr[posL][i+d] = L.mbr[i+d];
+					LParent.childMbr[nchild][i] = LL.mbr[i];
+					LParent.childMbr[nchild][i+d] = LL.mbr[i+d];
+					LParent.mbr[i] = min(min(LL.mbr[i], L.mbr[i]), LParent.mbr[i]);
+					LParent.mbr[i+d] = max(max(LL.mbr[i+d], L.mbr[i+d]), LParent.mbr[i+d]);
+				}
+				CreateNode(LParent, fh, nodeSize, maxCap, d, fm);
+				CreateNode(LL, fh, nodeSize, maxCap, d, fm);
+				return AdjustTree(LParent, LParent, fh, nodeSize, nodeIDCtr, false, maxCap, d, fm);
+			}
+			else{
+				for(int i=0; i<d; i++){
+					LParent.childMbr[posL][i] = L.mbr[i];
+					LParent.childMbr[posL][i+d] = L.mbr[i+d];
+					LParent.mbr[i] = min(LParent.mbr[i], L.mbr[i]);
+					LParent.mbr[i+d] = max(LParent.mbr[i+d], L.mbr[i+d]);
+				}
+				CreateNode(LParent, fh, nodeSize, maxCap, d, fm);
+				cout<<"AT14__________"<<endl;
+				Node newLParent = SplitNode(LL, LParent, fh, nodeSize, nodeIDCtr, maxCap, d, fm);
+				// CreateNode(newLParent, fh, nodeSize, maxCap, d);
+				return AdjustTree(LParent, newLParent, fh, nodeSize, nodeIDCtr, true, maxCap, d, fm);
+			}
+		}
 	}
-    for(int i=0; i<d; i++){
-        LParent.childMbr[posL][i] = L.mbr[i];
-        LParent.childMbr[posL][i+d] = L.mbr[i+d];
-        LParent.mbr[i] = min(LParent.mbr[i], L.mbr[i]);
-        LParent.mbr[i+d] = max(LParent.mbr[i+d], L.mbr[i+d]);
-    }
-    // cout<<"AT10__________"<<endl;
-	Node newLParent = SplitNode(LL, LParent, fh, nodeSize, nodeIDCtr, maxCap, d);
-    // CreateNode(newLParent, fh, nodeSize, maxCap, d);
-	return AdjustTree(LParent, newLParent, fh, nodeSize, nodeIDCtr, true, maxCap, d);
 }
 
 int main(int argc, char** argv){
@@ -1057,7 +1149,7 @@ int main(int argc, char** argv){
     char* t1=fh.PageAt(rootpage).GetData();
     std::memcpy(&temp,&t1[offs],sizeof(int));
     
-    // cout<<"ROOT DETAIL "<<temp<<endl;
+    cout<<"ROOT DETAIL "<<temp<<endl;
 	int arr[2];
 	arr[0]=rootId;
 	// arr[1]=rootId+1;
@@ -1078,11 +1170,12 @@ int main(int argc, char** argv){
 
             // for (int i=0; i<2; i++) cout<<pnt[i]<<" " ;
             // cout<<endl;
-			// cout<<"INSERT started\n";
+			 cout<<"INSERT started\n";
+			 cout<<rootId<<endl;
         //		get the root node from the page
         //    Node RN = GetNode(rootId, fh, nodeSize, maxCap, d);
         //    Node L = ChooseLeaf(RN, pnt, nodeSize,fh, maxCap, d);
-            rootId = insert(rootId,d,maxCap,fh,nodeSize,pnt,nodeIDCtr);
+            rootId = insert(rootId,d,maxCap,fh,nodeSize,pnt,nodeIDCtr, fm);
             arr[0] = rootId;
             // cout<<rootId<<" this is the rootid___________"<<endl;
 			fo<<"INSERT\n";
@@ -1096,7 +1189,7 @@ int main(int argc, char** argv){
                 // cout<<word<<" ";                
 				//pnt.push_back(stoi(word));
 			}  
-            // cout<<endl;          
+            // cout<<"Search Started"<<endl;          
 			if(search(arr[0],d,maxCap,nodeSize,pnt,fm,fh) ){
 				fo<<"TRUE\n";
 				fo<<"\n";

@@ -432,15 +432,22 @@ void CreateNode(Node node,FileHandler& fh, int nodeSize, int maxCap, int d, File
     cout<<" creating node"<<endl;        
 
     // cout<<PAGE_CONTENT_SIZE<<" "<<NOffset<<" "<<nodeSize<<endl;
-	if (NPnum>fh.LastPage().GetPageNum()){      
+	// if (NPnum>fh.LastPage().GetPageNum()){      
+    //     cout<<"newpage is created "<<node.id<<endl;  
+	// 	// fh.UnpinPage(NPage.GetPageNum());           
+	// 	NOffset=0;
+	// 	NPage=fh.NewPage();
+	// 	NPnum = NPage.GetPageNum();
+	// }
+	try{
+		NPage = fh.PageAt(NPnum);
+	}
+	catch (InvalidPageException e){      
         cout<<"newpage is created "<<node.id<<endl;  
 		// fh.UnpinPage(NPage.GetPageNum());           
 		NOffset=0;
 		NPage=fh.NewPage();
 		NPnum = NPage.GetPageNum();
-	}
-	else{
-		NPage = fh.PageAt(NPnum);
 	}
     vector<int> v1=node.vectorify();
     char* NData=NPage.GetData();
